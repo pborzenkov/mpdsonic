@@ -1,5 +1,8 @@
 use axum::{
     body::Body,
+    extract::{FromRequest, Query, RequestParts},
+    http::Request,
+    middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::{on_service, MethodFilter, MethodRouter, Router},
 };
@@ -8,19 +11,41 @@ use http::header::{self, HeaderValue};
 use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
 use tower_http::cors::{Any, CorsLayer};
-use yaserde_derive::YaSerialize;
 
+mod error;
 mod glue;
 mod system;
 
 static VERSION: &str = "1.16.1";
 
+use error::Error;
+
 // Result returned by an API handler
 type Result<T> = std::result::Result<T, Error>;
 
-pub fn get_router() -> Router {
+#[derive(Clone)]
+pub struct Authentication {
+    username: String,
+    password: String,
+    encoded_password: String,
+}
+
+impl Authentication {
+    pub fn new(username: &str, password: &str) -> Self {
+        Authentication {
+            username: username.to_string(),
+            password: password.to_string(),
+            encoded_password: format!("enc:{}", hex::encode(password)),
+        }
+    }
+}
+
+pub fn get_router(auth: Authentication) -> Router {
     Router::new()
         .nest("/rest", Router::new().merge(system::get_router()))
+        .route_layer(middleware::from_fn(move |req, next| {
+            authenticate(req, next, auth.clone())
+        }))
         .layer(CorsLayer::new().allow_origin(Any))
 }
 
@@ -36,6 +61,59 @@ where
     )
 }
 
+#[derive(Deserialize)]
+struct AuthenticationQuery {
+    u: String,
+    p: Option<String>,
+    t: Option<String>,
+    s: Option<String>,
+}
+
+async fn authenticate(req: Request<Body>, next: Next<Body>, auth: Authentication) -> Response {
+    use crypto::util::fixed_time_eq;
+
+    let mut req = RequestParts::new(req);
+
+    let aq = Query::<AuthenticationQuery>::from_request(&mut req).await;
+    let err: Option<Error> = if let Ok(aq) = aq {
+        let valid_user = fixed_time_eq(aq.u.as_bytes(), auth.username.as_bytes());
+
+        match (aq.p.as_deref(), aq.t.as_deref(), aq.s.as_deref()) {
+            (Some(p), _, _)
+                if p.starts_with("enc:")
+                    && fixed_time_eq(p.as_bytes(), auth.encoded_password.as_bytes())
+                    && valid_user =>
+            {
+                None
+            }
+            (Some(p), _, _) if p.starts_with("enc:") => Some(Error::authentication_failed()),
+            (Some(p), _, _)
+                if fixed_time_eq(p.as_bytes(), auth.password.as_bytes()) && valid_user =>
+            {
+                None
+            }
+            (Some(_), _, _) => Some(Error::authentication_failed()),
+            (_, Some(t), Some(s))
+                if fixed_time_eq(
+                    t.as_bytes(),
+                    format!("{:?}", md5::compute(auth.password + s)).as_bytes(),
+                ) && valid_user =>
+            {
+                None
+            }
+            (_, Some(_), Some(_)) => Some(Error::authentication_failed()),
+            _ => Some(Error::missing_parameter()),
+        }
+    } else {
+        aq.err().map(Into::into)
+    };
+    if let Some(err) = err {
+        return serialize_reply(err, &serialization_format(&req));
+    }
+
+    next.run(req.try_into_request().unwrap_or_default()).await
+}
+
 // Trait for data that can be returned as API reply
 trait Reply: yaserde::YaSerialize + serde::Serialize {
     fn is_error() -> bool {
@@ -44,33 +122,21 @@ trait Reply: yaserde::YaSerialize + serde::Serialize {
     fn field_name() -> Option<&'static str>;
 }
 
-// An API error response
-#[derive(Serialize, YaSerialize)]
-#[yaserde(rename = "error")]
-struct Error {
-    #[yaserde(attribute)]
-    code: u32,
-    #[yaserde(attribute)]
-    message: String,
-}
-
-impl Reply for Error {
-    fn is_error() -> bool {
-        true
-    }
-    fn field_name() -> Option<&'static str> {
-        Some("error")
-    }
-}
-
 // Optional query values controlling response serialization format.
 #[derive(Default, Deserialize)]
-struct SerializationFormat {
+struct SerializationQuery {
     f: Option<String>,
     callback: Option<String>,
 }
 
-fn serialize_reply<T>(reply: T, format: &SerializationFormat) -> Response
+fn serialization_format(req: &RequestParts<Body>) -> SerializationQuery {
+    let query = req.uri().query().unwrap_or_default();
+
+    // Official Subsonic server falls back to XML if some of the parameters are invalid or not provided
+    serde_urlencoded::from_str::<SerializationQuery>(query).unwrap_or_default()
+}
+
+fn serialize_reply<T>(reply: T, format: &SerializationQuery) -> Response
 where
     T: Reply,
 {
@@ -269,36 +335,4 @@ fn expect_json(inner: Option<serde_json::Value>, status: &str) -> String {
 #[cfg(test)]
 fn expect_ok_json(inner: Option<serde_json::Value>) -> String {
     expect_json(inner, "ok")
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{expect_json, expect_xml, json, xml, Error};
-    use serde_json::json;
-
-    #[test]
-    fn empty() {
-        let err = Error {
-            code: 10,
-            message: "missing parameter".to_string(),
-        };
-        assert_eq!(
-            xml(&err),
-            expect_xml(
-                Some(r#"<error code="10" message="missing parameter" />"#),
-                "failed"
-            )
-        );
-
-        assert_eq!(
-            json(&err),
-            expect_json(
-                Some(json!({"error": {
-                "code": 10,
-                "message": "missing parameter",
-                }})),
-                "failed",
-            ),
-        );
-    }
 }

@@ -38,20 +38,13 @@ where
         Box::pin(async move {
             let req = RequestParts::new(req);
 
-            let format = serialization_format(&req);
+            let format = super::serialization_format(&req);
             match self().await {
                 Ok(reply) => super::serialize_reply(reply.into_reply(), &format),
                 Err(error) => super::serialize_reply(error, &format),
             }
         })
     }
-}
-
-fn serialization_format(req: &RequestParts<Body>) -> super::SerializationFormat {
-    let query = req.uri().query().unwrap_or_default();
-
-    // Official Subsonic server falls back to XML if some of the parameters are invalid or not provided
-    serde_urlencoded::from_str::<super::SerializationFormat>(query).unwrap_or_default()
 }
 
 // An adapter that makes Handler into tower_service::Service

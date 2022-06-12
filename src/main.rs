@@ -1,36 +1,17 @@
 mod api;
+mod app;
 
 use axum::{
     self,
     body::Body,
     http::Request,
     middleware::{self, Next},
-    response::IntoResponse,
+    response::Response,
 };
-use clap::{crate_version, Arg, Command};
 use std::{env, net};
 use tracing::debug;
 
-fn build_app() -> Command<'static> {
-    Command::new("mpdsonic")
-        .version(crate_version!())
-        .arg(
-            Arg::new("address")
-                .long("address")
-                .short('a')
-                .help("The network address to listen to")
-                .default_value("127.0.0.1"),
-        )
-        .arg(
-            Arg::new("port")
-                .long("port")
-                .short('p')
-                .help("The network port to listen to")
-                .default_value("3000"),
-        )
-}
-
-async fn print_request(req: Request<Body>, next: Next<Body>) -> impl IntoResponse {
+async fn print_request(req: Request<Body>, next: Next<Body>) -> Response {
     let method = req.method().clone();
     let uri = req.uri().clone();
 
@@ -45,8 +26,12 @@ async fn print_request(req: Request<Body>, next: Next<Body>) -> impl IntoRespons
 async fn main() {
     tracing_subscriber::fmt::init();
 
-    let matches = build_app().get_matches_from(env::args_os());
-    let app = api::get_router().layer(middleware::from_fn(print_request));
+    let matches = app::build_app().get_matches_from(env::args_os());
+    let auth = api::Authentication::new(
+        matches.value_of("username").unwrap(),
+        matches.value_of("password").unwrap(),
+    );
+    let app = api::get_router(auth).layer(middleware::from_fn(print_request));
 
     axum::Server::bind(
         &(
@@ -58,12 +43,4 @@ async fn main() {
     .serve(app.into_make_service())
     .await
     .unwrap();
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn verify_app() {
-        super::build_app().debug_assert()
-    }
 }
