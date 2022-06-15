@@ -27,6 +27,10 @@ impl Error {
     pub fn authentication_failed() -> Self {
         Error::new(40, "Wrong username or password")
     }
+
+    pub fn not_authorized(msg: &str) -> Self {
+        Error::new(50, msg)
+    }
 }
 
 impl super::Reply for Error {

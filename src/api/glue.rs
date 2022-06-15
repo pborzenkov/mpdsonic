@@ -1,4 +1,8 @@
-use axum::{body::Body, extract::RequestParts, response::Response};
+use axum::{
+    body::Body,
+    extract::{FromRequest, RequestParts},
+    response::Response,
+};
 use futures_util::future::Map;
 use serde::Serialize;
 use std::{
@@ -46,6 +50,45 @@ where
         })
     }
 }
+
+macro_rules! impl_handler {
+    ( $($ty:ident),* $(,)? ) => {
+        #[allow(non_snake_case)]
+        impl<F, Fut, IR, R, $($ty,)*> Handler<($($ty,)*)> for F
+        where
+            F: FnOnce($($ty,)*) -> Fut + Clone + Send + 'static,
+            Fut: Future<Output = super::Result<IR>> + Send,
+            IR: IntoReply<Reply = R>,
+            R: super::Reply,
+            $($ty: FromRequest<Body> + Send,)*
+            $(<$ty as FromRequest<Body>>::Rejection: Into<super::Error>,)*
+        {
+            type Future = Pin<Box<dyn Future<Output = Response> + Send>>;
+
+            fn call(self, req: http::Request<Body>) -> Self::Future {
+                Box::pin(async move {
+                    let mut req = RequestParts::new(req);
+
+                    let format = super::serialization_format(&req);
+
+                    $(
+                        let $ty = match $ty::from_request(&mut req).await {
+                            Ok(value) => value,
+                            Err(rejection) => return super::serialize_reply::<super::Error>(rejection.into(), &format),
+                        };
+                    )*
+
+                    match self($($ty,)*).await {
+                        Ok(reply) => super::serialize_reply(reply.into_reply(), &format),
+                        Err(error) => super::serialize_reply(error, &format),
+                    }
+                })
+            }
+        }
+    };
+}
+
+impl_handler!(T1);
 
 // An adapter that makes Handler into tower_service::Service
 #[derive(Clone)]

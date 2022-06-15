@@ -15,6 +15,7 @@ use tower_http::cors::{Any, CorsLayer};
 mod error;
 mod glue;
 mod system;
+mod users;
 
 static VERSION: &str = "1.16.1";
 
@@ -42,7 +43,12 @@ impl Authentication {
 
 pub fn get_router(auth: Authentication) -> Router {
     Router::new()
-        .nest("/rest", Router::new().merge(system::get_router()))
+        .nest(
+            "/rest",
+            Router::new()
+                .merge(system::get_router())
+                .merge(users::get_router()),
+        )
         .route_layer(middleware::from_fn(move |req, next| {
             authenticate(req, next, auth.clone())
         }))
