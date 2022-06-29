@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
 use tower_http::cors::{Any, CorsLayer};
 
+mod browsing;
 mod error;
 mod glue;
 mod system;
@@ -46,6 +47,7 @@ pub fn get_router(auth: Authentication) -> Router {
         .nest(
             "/rest",
             Router::new()
+                .merge(browsing::get_router())
                 .merge(system::get_router())
                 .merge(users::get_router()),
         )
