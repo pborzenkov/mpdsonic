@@ -20,6 +20,10 @@ impl Error {
         }
     }
 
+    pub fn generic_error() -> Self {
+        Error::new(0, "A generic error")
+    }
+
     pub fn missing_parameter() -> Self {
         Error::new(10, "Required parameter is missing")
     }
@@ -45,6 +49,19 @@ impl super::Reply for Error {
 impl From<rejection::QueryRejection> for Error {
     fn from(_: rejection::QueryRejection) -> Self {
         Error::missing_parameter()
+    }
+}
+
+impl From<rejection::ExtensionRejection> for Error {
+    fn from(_: rejection::ExtensionRejection) -> Self {
+        Error::generic_error()
+    }
+}
+
+impl From<mpd_client::CommandError> for Error {
+    fn from(_: mpd_client::CommandError) -> Self {
+        // TODO: handle specific cases
+        Error::generic_error()
     }
 }
 

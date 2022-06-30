@@ -89,6 +89,7 @@ macro_rules! impl_handler {
 }
 
 impl_handler!(T1);
+impl_handler!(T1, T2);
 
 // An adapter that makes Handler into tower_service::Service
 #[derive(Clone)]

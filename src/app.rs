@@ -35,6 +35,19 @@ pub fn build_app() -> Command<'static> {
                 .takes_value(true)
                 .required(true),
         )
+        .arg(
+            Arg::new("mpd-address")
+                .long("mpd-address")
+                .help("MPD address")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::new("mpd-password")
+                .long("mpd-password")
+                .help("MPD password")
+                .env("MPDSONIC_MPD_PASSWORD")
+                .takes_value(true),
+        )
 }
 
 #[cfg(test)]

@@ -1,6 +1,6 @@
 use axum::{
     body::Body,
-    extract::{FromRequest, Query, RequestParts},
+    extract::{Extension, FromRequest, Query, RequestParts},
     http::Request,
     middleware::{self, Next},
     response::{IntoResponse, Response},
@@ -8,8 +8,9 @@ use axum::{
 };
 use glue::Handler;
 use http::header::{self, HeaderValue};
+use mpd_client::Client;
 use serde::{Deserialize, Serialize};
-use std::convert::Infallible;
+use std::{convert::Infallible, sync::Arc};
 use tower_http::cors::{Any, CorsLayer};
 
 mod browsing;
@@ -32,6 +33,10 @@ pub struct Authentication {
     encoded_password: String,
 }
 
+struct State {
+    client: Client,
+}
+
 impl Authentication {
     pub fn new(username: &str, password: &str) -> Self {
         Authentication {
@@ -42,7 +47,7 @@ impl Authentication {
     }
 }
 
-pub fn get_router(auth: Authentication) -> Router {
+pub fn get_router(auth: Authentication, client: Client) -> Router {
     Router::new()
         .nest(
             "/rest",
@@ -55,6 +60,7 @@ pub fn get_router(auth: Authentication) -> Router {
             authenticate(req, next, auth.clone())
         }))
         .layer(CorsLayer::new().allow_origin(Any))
+        .layer(Extension(Arc::new(State { client })))
 }
 
 // handler converts an API handler into a MethodRouter which can be provided to axum's router
