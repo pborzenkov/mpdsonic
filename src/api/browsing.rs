@@ -1,4 +1,4 @@
-use super::types::{AlbumID, ArtistID, ArtworkID};
+use super::types::{AlbumID, ArtistID, CoverArtID};
 use crate::mpd::Count;
 use axum::{
     extract::{Extension, Query},
@@ -61,8 +61,8 @@ struct GetArtistsQuery {
 }
 
 async fn get_artists(
-    Query(param): Query<GetArtistsQuery>,
     Extension(state): Extension<Arc<super::State>>,
+    Query(param): Query<GetArtistsQuery>,
 ) -> super::Result<GetArtists> {
     match param.music_folder_id.as_deref() {
         Some(ROOT_FOLDER) | None => (),
@@ -155,8 +155,8 @@ struct GetArtistQuery {
 }
 
 async fn get_artist(
-    Query(param): Query<GetArtistQuery>,
     Extension(state): Extension<Arc<super::State>>,
+    Query(param): Query<GetArtistQuery>,
 ) -> super::Result<GetArtist> {
     let reply = state
         .client
@@ -212,7 +212,7 @@ async fn get_artist(
                 .get(&Tag::Date)
                 .and_then(|v| v.first().and_then(|d| d.parse().ok()));
             album.genre = song.tags.get(&Tag::Genre).map(|v| v.join(", "));
-            album.cover_art = ArtworkID::new(&song.file_path().display().to_string());
+            album.cover_art = CoverArtID::new(&song.file_path().display().to_string());
         }
     }
 
@@ -246,7 +246,7 @@ struct Album {
     #[serde(skip_serializing_if = "Option::is_none")]
     genre: Option<String>,
     #[yaserde(attribute, rename = "coverArt")]
-    cover_art: ArtworkID,
+    cover_art: CoverArtID,
 }
 
 #[derive(Serialize, YaSerialize)]
@@ -277,7 +277,7 @@ mod tests {
     };
     use crate::api::{
         expect_ok_json, expect_ok_xml, json,
-        types::{AlbumID, ArtistID, ArtworkID},
+        types::{AlbumID, ArtistID, CoverArtID},
         xml,
     };
     use serde_json::json;
@@ -408,7 +408,7 @@ mod tests {
                     duration: 300,
                     year: Some(2000),
                     genre: Some("rock".to_string()),
-                    cover_art: ArtworkID::new("artwork1"),
+                    cover_art: CoverArtID::new("artwork1"),
                 },
                 Album {
                     id: AlbumID::new("album2", "alpha"),
@@ -419,7 +419,7 @@ mod tests {
                     duration: 450,
                     year: None,
                     genre: None,
-                    cover_art: ArtworkID::new("artwork2"),
+                    cover_art: CoverArtID::new("artwork2"),
                 },
             ],
         };

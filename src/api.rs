@@ -6,7 +6,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{on_service, MethodFilter, MethodRouter, Router},
 };
-use glue::Handler;
+use glue::{Handler, RawHandler};
 use http::header::{self, HeaderValue};
 use mpd_client::Client;
 use serde::{Deserialize, Serialize};
@@ -16,6 +16,7 @@ use tower_http::cors::{Any, CorsLayer};
 mod browsing;
 mod error;
 mod glue;
+mod retrieval;
 mod system;
 mod types;
 mod users;
@@ -54,6 +55,7 @@ pub fn get_router(auth: Authentication, client: Client) -> Router {
             "/rest",
             Router::new()
                 .merge(browsing::get_router())
+                .merge(retrieval::get_router())
                 .merge(system::get_router())
                 .merge(users::get_router()),
         )
@@ -68,6 +70,18 @@ pub fn get_router(auth: Authentication, client: Client) -> Router {
 fn handler<H, T>(handler: H) -> MethodRouter<Body, Infallible>
 where
     H: Handler<T>,
+    T: Clone + 'static,
+{
+    on_service(
+        MethodFilter::GET | MethodFilter::POST,
+        handler.into_service(),
+    )
+}
+
+// raw_handler converts a raw API handler into a MethodRouter which can be provided to axum's router
+fn raw_handler<H, T>(handler: H) -> MethodRouter<Body, Infallible>
+where
+    H: RawHandler<T>,
     T: Clone + 'static,
 {
     on_service(

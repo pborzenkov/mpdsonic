@@ -142,13 +142,13 @@ impl AlbumID {
 // ArtworkID identifies an artwork
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(remote = "Self")]
-pub struct ArtworkID {
+pub struct CoverArtID {
     pub path: String,
 }
 
-impl ArtworkID {
+impl CoverArtID {
     pub fn new(path: &str) -> Self {
-        ArtworkID {
+        CoverArtID {
             path: path.to_string(),
         }
     }
@@ -156,4 +156,4 @@ impl ArtworkID {
 
 api_id!(ArtistID);
 api_id!(AlbumID);
-api_id!(ArtworkID);
+api_id!(CoverArtID);

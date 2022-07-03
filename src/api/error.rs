@@ -35,6 +35,10 @@ impl Error {
     pub fn not_authorized(msg: &str) -> Self {
         Error::new(50, msg)
     }
+
+    pub fn not_found() -> Self {
+        Error::new(70, "The requested data was not found")
+    }
 }
 
 impl super::Reply for Error {

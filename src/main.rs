@@ -5,7 +5,7 @@ use axum::{
     middleware::{self, Next},
     response::Response,
 };
-use mpd_client::Client;
+use mpd_client::{commands::definitions::SetBinaryLimit, Client};
 use std::{env, net};
 use tokio::net::TcpStream;
 use tracing::{debug, warn};
@@ -40,6 +40,8 @@ async fn main() {
         Client::connect_with_password_opt(connection, matches.value_of("mpd-password"))
             .await
             .unwrap();
+
+    client.command(SetBinaryLimit(128 * 1024)).await.unwrap();
 
     let auth = api::Authentication::new(
         matches.value_of("username").unwrap(),
