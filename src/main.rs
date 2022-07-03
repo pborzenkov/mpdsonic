@@ -12,6 +12,7 @@ use tracing::{debug, warn};
 
 mod api;
 mod app;
+mod mpd;
 
 async fn print_request(req: Request<Body>, next: Next<Body>) -> Response {
     let method = req.method().clone();

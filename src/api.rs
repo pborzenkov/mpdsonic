@@ -17,6 +17,7 @@ mod browsing;
 mod error;
 mod glue;
 mod system;
+mod types;
 mod users;
 
 static VERSION: &str = "1.16.1";
