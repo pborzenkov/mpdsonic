@@ -12,6 +12,7 @@ use mpd_client::{
 
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use tracing::log::warn;
 use yaserde_derive::YaSerialize;
 
 const ROOT_FOLDER: &str = "/";
@@ -21,6 +22,7 @@ pub fn get_router() -> Router {
         .route("/getMusicFolders.view", super::handler(get_music_folders))
         .route("/getArtists.view", super::handler(get_artists))
         .route("/getArtist.view", super::handler(get_artist))
+        .route("/getArtistInfo2.view", super::handler(get_artist_info2))
 }
 
 async fn get_music_folders() -> super::Result<GetMusicFolders> {
@@ -270,10 +272,56 @@ impl super::Reply for GetArtist {
     }
 }
 
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GetArtistInfo2Query {
+    #[serde(rename = "id")]
+    artist: ArtistID,
+}
+
+async fn get_artist_info2(
+    Extension(state): Extension<Arc<super::State>>,
+    Query(param): Query<GetArtistInfo2Query>,
+) -> super::Result<ArtistInfo2> {
+    let reply = state
+        .client
+        .command(
+            List::new(Tag::MusicBrainzArtistId)
+                .filter(Filter::tag(Tag::Artist, param.artist.name.clone())),
+        )
+        .await?;
+    if reply.fields.len() > 1 {
+        warn!(
+            "more than one MusicBrainzArtistID tag for {}, using the first",
+            param.artist.name
+        );
+    }
+
+    // TODO: artwork, similar artists
+    Ok(ArtistInfo2 {
+        music_brainz_id: reply.fields.get(0).map(|x| x.1.clone()),
+    })
+}
+
+#[derive(Serialize, YaSerialize)]
+#[yaserde(rename = "artistInfo2")]
+#[serde(rename_all = "camelCase")]
+struct ArtistInfo2 {
+    #[yaserde(child, rename = "musicBrainzId")]
+    music_brainz_id: Option<String>,
+}
+
+impl super::Reply for ArtistInfo2 {
+    fn field_name() -> Option<&'static str> {
+        Some("artistInfo2")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        Album, Artist, GetArtist, GetArtists, GetMusicFolders, Index, MusicFolder, ROOT_FOLDER,
+        Album, Artist, ArtistInfo2, GetArtist, GetArtists, GetMusicFolders, Index, MusicFolder,
+        ROOT_FOLDER,
     };
     use crate::api::{
         expect_ok_json, expect_ok_xml, json,
@@ -461,6 +509,29 @@ mod tests {
                         "coverArt": "eyJwYXRoIjoiYXJ0d29yazIifQ==",
                     },
                 ]
+            }
+            })),),
+        );
+    }
+
+    #[test]
+    fn get_artist_info2() {
+        let get_artist_info2 = ArtistInfo2 {
+            music_brainz_id: Some("788ad31c-bf0c-4a31-83f8-b8b130d79c76".to_string()),
+        };
+        assert_eq!(
+            xml(&get_artist_info2),
+            expect_ok_xml(Some(
+                r#"<artistInfo2>
+    <musicBrainzId>788ad31c-bf0c-4a31-83f8-b8b130d79c76</musicBrainzId>
+  </artistInfo2>"#
+            ),)
+        );
+
+        assert_eq!(
+            json(&get_artist_info2),
+            expect_ok_json(Some(json!({"artistInfo2": {
+                "musicBrainzId": "788ad31c-bf0c-4a31-83f8-b8b130d79c76",
             }
             })),),
         );
