@@ -139,6 +139,21 @@ impl AlbumID {
     }
 }
 
+// SongID identifies a song
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(remote = "Self")]
+pub struct SongID {
+    pub path: String,
+}
+
+impl SongID {
+    pub fn new(path: &str) -> Self {
+        SongID {
+            path: path.to_string(),
+        }
+    }
+}
+
 // ArtworkID identifies an artwork
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(remote = "Self")]
@@ -156,4 +171,5 @@ impl CoverArtID {
 
 api_id!(ArtistID);
 api_id!(AlbumID);
+api_id!(SongID);
 api_id!(CoverArtID);

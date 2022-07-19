@@ -1,4 +1,7 @@
-use super::types::{AlbumID, ArtistID, CoverArtID};
+use super::{
+    types::{AlbumID, ArtistID, CoverArtID, SongID},
+    Error,
+};
 use crate::mpd::Count;
 use axum::{
     extract::{Extension, Query},
@@ -23,6 +26,7 @@ pub fn get_router() -> Router {
         .route("/getArtists.view", super::handler(get_artists))
         .route("/getArtist.view", super::handler(get_artist))
         .route("/getArtistInfo2.view", super::handler(get_artist_info2))
+        .route("/getAlbum.view", super::handler(get_album))
 }
 
 async fn get_music_folders() -> super::Result<GetMusicFolders> {
@@ -68,7 +72,7 @@ async fn get_artists(
 ) -> super::Result<GetArtists> {
     match param.music_folder_id.as_deref() {
         Some(ROOT_FOLDER) | None => (),
-        _ => return Err(super::Error::generic_error()),
+        _ => return Err(Error::generic_error()),
     };
 
     let reply = state
@@ -187,7 +191,7 @@ async fn get_artist(
                 }
                 Tag::Other(t) if t.as_ref() == "playtime" => {
                     if let Some(a) = albums.last_mut() {
-                        a.duration = f.1.parse::<f32>().map(|d| d as u32).unwrap_or(0);
+                        a.duration = f.1.parse::<f32>().map(|d| d as u64).unwrap_or(0);
                     }
                 }
                 _ => (),
@@ -240,7 +244,7 @@ struct Album {
     #[yaserde(attribute, rename = "songCount")]
     song_count: u32,
     #[yaserde(attribute)]
-    duration: u32,
+    duration: u64,
     #[yaserde(attribute)]
     #[serde(skip_serializing_if = "Option::is_none")]
     year: Option<u32>,
@@ -317,15 +321,169 @@ impl super::Reply for ArtistInfo2 {
     }
 }
 
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GetAlbumQuery {
+    #[serde(rename = "id")]
+    album: AlbumID,
+}
+
+async fn get_album(
+    Extension(state): Extension<Arc<super::State>>,
+    Query(param): Query<GetAlbumQuery>,
+) -> super::Result<GetAlbum> {
+    let reply_songs = state
+        .client
+        .command(Find::new(
+            Filter::tag(Tag::Artist, param.album.artist.clone())
+                .and(Filter::tag(Tag::Album, param.album.name.clone())),
+        ))
+        .await?;
+    let reply_count = state
+        .client
+        .command(Count::new(
+            Filter::tag(Tag::Artist, param.album.artist.clone())
+                .and(Filter::tag(Tag::Album, param.album.name.clone())),
+        ))
+        .await?;
+
+    let mut resp = GetAlbum {
+        id: param.album.clone(),
+        name: param.album.name.clone(),
+        artist: param.album.artist.clone(),
+        artist_id: ArtistID::new(&param.album.artist),
+        year: reply_songs.iter().nth(0).and_then(|s| {
+            s.tags
+                .get(&Tag::Date)
+                .and_then(|v| v.first().and_then(|d| d.parse().ok()))
+        }),
+        genre: reply_songs
+            .iter()
+            .nth(0)
+            .and_then(|s| s.tags.get(&Tag::Genre).map(|v| v.join(", "))),
+        cover_art: reply_songs
+            .iter()
+            .nth(0)
+            .map(|s| CoverArtID::new(&s.file_path().display().to_string()))
+            .unwrap_or_default(),
+        songs: reply_songs
+            .into_iter()
+            .map(|s| Song {
+                id: SongID::new(&s.file_path().display().to_string()),
+                title: s.title().map(str::to_string),
+                album: param.album.name.clone(),
+                artist: param.album.artist.clone(),
+                track: s
+                    .tags
+                    .get(&Tag::Track)
+                    .and_then(|v| v.first().and_then(|v| v.parse().ok())),
+                year: s
+                    .tags
+                    .get(&Tag::Date)
+                    .and_then(|v| v.first().and_then(|v| v.parse().ok())),
+                genre: s.tags.get(&Tag::Genre).map(|v| v.join(", ")),
+                cover_art: CoverArtID::new(&s.file_path().display().to_string()),
+                duration: s.duration.map(|v| v.as_secs()),
+                path: s.file_path().display().to_string(),
+                album_id: param.album.clone(),
+                artist_id: ArtistID::new(&param.album.artist),
+            })
+            .collect(),
+        ..Default::default()
+    };
+    for (tag, value) in reply_count.fields {
+        match tag {
+            Tag::Other(tag) if tag.as_ref() == "songs" => {
+                resp.song_count = value.parse().unwrap_or(0)
+            }
+            Tag::Other(tag) if tag.as_ref() == "playtime" => {
+                resp.duration = value.parse::<f32>().map(|d| d as u64).unwrap_or(0)
+            }
+            _ => (),
+        };
+    }
+
+    Ok(resp)
+}
+
+#[derive(Serialize, YaSerialize, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+struct Song {
+    #[yaserde(attribute)]
+    id: SongID,
+    #[yaserde(attribute)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    title: Option<String>,
+    #[yaserde(attribute)]
+    album: String,
+    #[yaserde(attribute)]
+    artist: String,
+    #[yaserde(attribute)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    track: Option<u32>,
+    #[yaserde(attribute)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    year: Option<u32>,
+    #[yaserde(attribute)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    genre: Option<String>,
+    #[yaserde(attribute, rename = "coverArt")]
+    cover_art: CoverArtID,
+    #[yaserde(attribute)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    duration: Option<u64>,
+    #[yaserde(attribute)]
+    path: String,
+    #[yaserde(attribute, rename = "albumId")]
+    album_id: AlbumID,
+    #[yaserde(attribute, rename = "artistId")]
+    artist_id: ArtistID,
+}
+
+#[derive(Default, Serialize, YaSerialize)]
+#[yaserde(rename = "album")]
+#[serde(rename_all = "camelCase")]
+struct GetAlbum {
+    #[yaserde(attribute)]
+    id: AlbumID,
+    #[yaserde(attribute)]
+    name: String,
+    #[yaserde(attribute)]
+    artist: String,
+    #[yaserde(attribute, rename = "artistId")]
+    artist_id: ArtistID,
+    #[yaserde(attribute, rename = "songCount")]
+    song_count: u32,
+    #[yaserde(attribute)]
+    duration: u64,
+    #[yaserde(attribute)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    year: Option<u32>,
+    #[yaserde(attribute)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    genre: Option<String>,
+    #[yaserde(attribute, rename = "coverArt")]
+    cover_art: CoverArtID,
+    #[yaserde(child, rename = "song")]
+    #[serde(rename = "song")]
+    songs: Vec<Song>,
+}
+
+impl super::Reply for GetAlbum {
+    fn field_name() -> Option<&'static str> {
+        Some("album")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        Album, Artist, ArtistInfo2, GetArtist, GetArtists, GetMusicFolders, Index, MusicFolder,
-        ROOT_FOLDER,
+        Album, Artist, ArtistInfo2, GetAlbum, GetArtist, GetArtists, GetMusicFolders, Index,
+        MusicFolder, Song, ROOT_FOLDER,
     };
     use crate::api::{
         expect_ok_json, expect_ok_xml, json,
-        types::{AlbumID, ArtistID, CoverArtID},
+        types::{AlbumID, ArtistID, CoverArtID, SongID},
         xml,
     };
     use serde_json::json;
@@ -532,6 +690,101 @@ mod tests {
             json(&get_artist_info2),
             expect_ok_json(Some(json!({"artistInfo2": {
                 "musicBrainzId": "788ad31c-bf0c-4a31-83f8-b8b130d79c76",
+            }
+            })),),
+        );
+    }
+
+    #[test]
+    fn get_album() {
+        let get_album = GetAlbum {
+            id: AlbumID::new("alpha", "beta"),
+            name: "beta".to_string(),
+            artist: "alpha".to_string(),
+            artist_id: ArtistID::new("alpha"),
+            song_count: 2,
+            duration: 300,
+            year: Some(2020),
+            genre: Some("rock".to_string()),
+            cover_art: CoverArtID::new("artwork"),
+            songs: vec![
+                Song {
+                    id: SongID::new("song1"),
+                    title: Some("song1".to_string()),
+                    album: "beta".to_string(),
+                    artist: "alpha".to_string(),
+                    track: Some(1),
+                    year: Some(2020),
+                    genre: Some("rock".to_string()),
+                    cover_art: CoverArtID::new("artwork"),
+                    duration: Some(300),
+                    path: "path1".to_string(),
+                    album_id: AlbumID::new("alpha", "beta"),
+                    artist_id: ArtistID::new("alpha"),
+                },
+                Song {
+                    id: SongID::new("song2"),
+                    title: None,
+                    album: "beta".to_string(),
+                    artist: "alpha".to_string(),
+                    track: None,
+                    year: None,
+                    genre: None,
+                    cover_art: CoverArtID::new("artwork"),
+                    duration: None,
+                    path: "path2".to_string(),
+                    album_id: AlbumID::new("alpha", "beta"),
+                    artist_id: ArtistID::new("alpha"),
+                },
+            ],
+        };
+        assert_eq!(
+            xml(&get_album),
+            expect_ok_xml(Some(
+                r#"<album id="eyJuYW1lIjoiYWxwaGEiLCJhcnRpc3QiOiJiZXRhIn0=" name="beta" artist="alpha" artistId="eyJuYW1lIjoiYWxwaGEifQ==" songCount="2" duration="300" year="2020" genre="rock" coverArt="eyJwYXRoIjoiYXJ0d29yayJ9">
+    <song id="eyJwYXRoIjoic29uZzEifQ==" title="song1" album="beta" artist="alpha" track="1" year="2020" genre="rock" coverArt="eyJwYXRoIjoiYXJ0d29yayJ9" duration="300" path="path1" albumId="eyJuYW1lIjoiYWxwaGEiLCJhcnRpc3QiOiJiZXRhIn0=" artistId="eyJuYW1lIjoiYWxwaGEifQ==" />
+    <song id="eyJwYXRoIjoic29uZzIifQ==" album="beta" artist="alpha" coverArt="eyJwYXRoIjoiYXJ0d29yayJ9" path="path2" albumId="eyJuYW1lIjoiYWxwaGEiLCJhcnRpc3QiOiJiZXRhIn0=" artistId="eyJuYW1lIjoiYWxwaGEifQ==" />
+  </album>"#
+            ),)
+        );
+
+        assert_eq!(
+            json(&get_album),
+            expect_ok_json(Some(json!({"album": {
+                "id": "eyJuYW1lIjoiYWxwaGEiLCJhcnRpc3QiOiJiZXRhIn0=",
+                "name": "beta",
+                "artist": "alpha",
+                "artistId": "eyJuYW1lIjoiYWxwaGEifQ==",
+                "songCount": 2,
+                "duration": 300,
+                "year": 2020,
+                "genre": "rock",
+                "coverArt": "eyJwYXRoIjoiYXJ0d29yayJ9",
+                "song": [
+                    {
+                        "id": "eyJwYXRoIjoic29uZzEifQ==",
+                        "title": "song1",
+                        "album": "beta",
+                        "artist": "alpha",
+                        "track": 1,
+                        "year": 2020,
+                        "genre": "rock",
+                        "coverArt": "eyJwYXRoIjoiYXJ0d29yayJ9",
+                        "duration": 300,
+                        "path": "path1",
+                        "albumId": "eyJuYW1lIjoiYWxwaGEiLCJhcnRpc3QiOiJiZXRhIn0=",
+                        "artistId": "eyJuYW1lIjoiYWxwaGEifQ==",
+                    },
+                    {
+                        "id": "eyJwYXRoIjoic29uZzIifQ==",
+                        "album": "beta",
+                        "artist": "alpha",
+                        "coverArt": "eyJwYXRoIjoiYXJ0d29yayJ9",
+                        "path": "path2",
+                        "albumId": "eyJuYW1lIjoiYWxwaGEiLCJhcnRpc3QiOiJiZXRhIn0=",
+                        "artistId": "eyJuYW1lIjoiYWxwaGEifQ==",
+                    },
+                ]
             }
             })),),
         );
