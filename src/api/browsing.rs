@@ -83,11 +83,11 @@ async fn get_artists(
     let index = reply
         .fields
         .iter()
-        .fold(vec![], |mut artists: Vec<Artist>, f| {
-            match f.0 {
+        .fold(vec![], |mut artists: Vec<Artist>, (tag, value)| {
+            match tag {
                 Tag::ArtistSort => artists.push(Artist {
-                    id: ArtistID::new(&f.1),
-                    name: f.1.clone(),
+                    id: ArtistID::new(&value),
+                    name: value.clone(),
                     album_count: 0,
                 }),
                 Tag::AlbumSort => {
@@ -175,23 +175,23 @@ async fn get_artist(
     let mut albums = reply
         .fields
         .iter()
-        .fold(vec![], |mut albums: Vec<Album>, f| {
-            match &f.0 {
+        .fold(vec![], |mut albums: Vec<Album>, (tag, value)| {
+            match &tag {
                 Tag::AlbumSort => albums.push(Album {
-                    id: AlbumID::new(&f.1, &param.artist.name),
-                    name: f.1.clone(),
+                    id: AlbumID::new(&value, &param.artist.name),
+                    name: value.clone(),
                     artist: param.artist.name.clone(),
                     artist_id: param.artist.clone(),
                     ..Default::default()
                 }),
                 Tag::Other(t) if t.as_ref() == "songs" => {
                     if let Some(a) = albums.last_mut() {
-                        a.song_count = f.1.parse().unwrap_or(0);
+                        a.song_count = value.parse().unwrap_or(0);
                     }
                 }
                 Tag::Other(t) if t.as_ref() == "playtime" => {
                     if let Some(a) = albums.last_mut() {
-                        a.duration = f.1.parse::<f32>().map(|d| d as u64).unwrap_or(0);
+                        a.duration = value.parse::<f32>().map(|d| d as u64).unwrap_or(0);
                     }
                 }
                 _ => (),
@@ -303,7 +303,7 @@ async fn get_artist_info2(
 
     // TODO: artwork, similar artists
     Ok(ArtistInfo2 {
-        music_brainz_id: reply.fields.get(0).map(|x| x.1.clone()),
+        music_brainz_id: reply.fields.first().map(|x| x.1.clone()),
     })
 }
 
@@ -352,18 +352,16 @@ async fn get_album(
         name: param.album.name.clone(),
         artist: param.album.artist.clone(),
         artist_id: ArtistID::new(&param.album.artist),
-        year: reply_songs.iter().nth(0).and_then(|s| {
+        year: reply_songs.first().and_then(|s| {
             s.tags
                 .get(&Tag::Date)
                 .and_then(|v| v.first().and_then(|d| d.parse().ok()))
         }),
         genre: reply_songs
-            .iter()
-            .nth(0)
+            .first()
             .and_then(|s| s.tags.get(&Tag::Genre).map(|v| v.join(", "))),
         cover_art: reply_songs
-            .iter()
-            .nth(0)
+            .first()
             .map(|s| CoverArtID::new(&s.file_path().display().to_string()))
             .unwrap_or_default(),
         songs: reply_songs
