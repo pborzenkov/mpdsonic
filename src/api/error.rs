@@ -1,3 +1,4 @@
+use crate::library;
 use axum::extract::rejection;
 use serde::Serialize;
 use yaserde_derive::YaSerialize;
@@ -20,8 +21,11 @@ impl Error {
         }
     }
 
-    pub fn generic_error() -> Self {
-        Error::new(0, "A generic error")
+    pub fn generic_error(msg: Option<&str>) -> Self {
+        match msg {
+            Some(msg) => Error::new(0, &format!("A generic error: {}", msg)),
+            None => Error::new(0, "A generic error"),
+        }
     }
 
     pub fn missing_parameter() -> Self {
@@ -58,14 +62,30 @@ impl From<rejection::QueryRejection> for Error {
 
 impl From<rejection::ExtensionRejection> for Error {
     fn from(_: rejection::ExtensionRejection) -> Self {
-        Error::generic_error()
+        Error::generic_error(None)
     }
 }
 
 impl From<mpd_client::CommandError> for Error {
     fn from(_: mpd_client::CommandError) -> Self {
         // TODO: handle specific cases
-        Error::generic_error()
+        Error::generic_error(None)
+    }
+}
+
+impl From<library::Error> for Error {
+    fn from(err: library::Error) -> Self {
+        if err.is_not_found() {
+            Error::not_found()
+        } else {
+            Error::generic_error(None)
+        }
+    }
+}
+
+impl From<std::io::Error> for Error {
+    fn from(err: std::io::Error) -> Self {
+        Error::generic_error(Some(&err.to_string()))
     }
 }
 

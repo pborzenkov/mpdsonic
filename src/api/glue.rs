@@ -3,7 +3,7 @@ use axum::{
     extract::{FromRequest, RequestParts},
     response::{IntoResponse, Response},
 };
-use futures_util::future::Map;
+use futures::future::Map;
 use serde::Serialize;
 use std::{
     convert::Infallible,
@@ -172,7 +172,7 @@ where
     }
 
     fn call(&mut self, req: http::Request<Body>) -> Self::Future {
-        use futures_util::future::FutureExt;
+        use futures::future::FutureExt;
 
         H::call(self.handler.clone(), req).map(Ok)
     }
@@ -207,7 +207,7 @@ where
     }
 
     fn call(&mut self, req: http::Request<Body>) -> Self::Future {
-        use futures_util::future::FutureExt;
+        use futures::future::FutureExt;
 
         H::call(self.handler.clone(), req).map(Ok)
     }

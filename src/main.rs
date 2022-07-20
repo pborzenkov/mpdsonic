@@ -12,6 +12,7 @@ use tracing::{debug, warn};
 
 mod api;
 mod app;
+mod library;
 mod mpd;
 
 async fn print_request(req: Request<Body>, next: Next<Body>) -> Response {
@@ -47,7 +48,12 @@ async fn main() {
         matches.value_of("username").unwrap(),
         matches.value_of("password").unwrap(),
     );
-    let app = api::get_router(auth, client).layer(middleware::from_fn(print_request));
+    let app = api::get_router(
+        auth,
+        client,
+        library::Library::new(matches.value_of("mpd-library").unwrap()),
+    )
+    .layer(middleware::from_fn(print_request));
 
     axum::Server::bind(
         &(

@@ -48,6 +48,13 @@ pub fn build_app() -> Command<'static> {
                 .env("MPDSONIC_MPD_PASSWORD")
                 .takes_value(true),
         )
+        .arg(
+            Arg::new("mpd-library")
+                .long("mpd-library")
+                .help("Location of the MPD library")
+                .takes_value(true)
+                .required(true),
+        )
 }
 
 #[cfg(test)]

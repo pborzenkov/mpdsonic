@@ -72,7 +72,7 @@ async fn get_artists(
 ) -> super::Result<GetArtists> {
     match param.music_folder_id.as_deref() {
         Some(ROOT_FOLDER) | None => (),
-        _ => return Err(Error::generic_error()),
+        _ => return Err(Error::generic_error(None)),
     };
 
     let reply = state

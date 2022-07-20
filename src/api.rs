@@ -1,3 +1,4 @@
+use super::library::Library;
 use axum::{
     body::Body,
     extract::{Extension, FromRequest, Query, RequestParts},
@@ -37,6 +38,7 @@ pub struct Authentication {
 
 struct State {
     client: Client,
+    lib: Library,
 }
 
 impl Authentication {
@@ -49,7 +51,7 @@ impl Authentication {
     }
 }
 
-pub fn get_router(auth: Authentication, client: Client) -> Router {
+pub fn get_router(auth: Authentication, client: Client, lib: Library) -> Router {
     Router::new()
         .nest(
             "/rest",
@@ -63,7 +65,7 @@ pub fn get_router(auth: Authentication, client: Client) -> Router {
             authenticate(req, next, auth.clone())
         }))
         .layer(CorsLayer::new().allow_origin(Any))
-        .layer(Extension(Arc::new(State { client })))
+        .layer(Extension(Arc::new(State { client, lib })))
 }
 
 // handler converts an API handler into a MethodRouter which can be provided to axum's router
