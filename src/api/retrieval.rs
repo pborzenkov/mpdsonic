@@ -24,6 +24,7 @@ pub fn get_router() -> Router {
     Router::new()
         .route("/getCoverArt.view", super::raw_handler(get_cover_art))
         .route("/stream.view", super::raw_handler(stream))
+        .route("/getAvatar.view", super::raw_handler(get_avatar))
 }
 
 #[derive(Clone, Deserialize)]
@@ -174,4 +175,20 @@ async fn stream(
     };
 
     return Ok(StreamBody::new(output_stream));
+}
+
+#[derive(Clone, Deserialize)]
+struct GetAvatarQuery {
+    u: String,
+    username: String,
+}
+
+async fn get_avatar(Query(params): Query<GetAvatarQuery>) -> super::Result<Response> {
+    match params.u == params.username {
+        true => Err(Error::not_found()),
+        false => Err(Error::not_authorized(&format!(
+            "{} is not authorized to get details for other users.",
+            params.u
+        ))),
+    }
 }
