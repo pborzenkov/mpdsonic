@@ -1,5 +1,6 @@
 use bytes::Bytes;
 use futures::{Stream, StreamExt};
+use reqwest::StatusCode;
 use std::{
     error::Error as StdError,
     fmt,
@@ -9,16 +10,20 @@ use std::{
 };
 use tokio::fs::File;
 use tokio_util::io::ReaderStream;
+use url::Url;
 
 #[derive(Debug)]
 pub(crate) enum Error {
     IO(std::io::Error),
+    URL(url::ParseError),
+    HTTP(reqwest::Error),
 }
 
 impl Error {
     pub fn is_not_found(&self) -> bool {
         match self {
             Error::IO(x) if x.kind() == ErrorKind::NotFound => true,
+            Error::HTTP(x) if x.status().map_or(false, |v| v == StatusCode::NOT_FOUND) => true,
             _ => false,
         }
     }
@@ -42,7 +47,21 @@ impl Into<std::io::Error> for Error {
     fn into(self) -> std::io::Error {
         match self {
             Error::IO(x) => x,
+            Error::URL(x) => std::io::Error::new(ErrorKind::Other, x),
+            Error::HTTP(x) => std::io::Error::new(ErrorKind::Other, x),
         }
+    }
+}
+
+impl From<url::ParseError> for Error {
+    fn from(err: url::ParseError) -> Self {
+        Error::URL(err)
+    }
+}
+
+impl From<reqwest::Error> for Error {
+    fn from(err: reqwest::Error) -> Self {
+        Error::HTTP(err)
     }
 }
 
@@ -50,11 +69,18 @@ pub(crate) type Result<T> = std::result::Result<T, Error>;
 
 pub enum Library {
     FS(FSLibrary),
+    HTTP(HTTPLibrary),
 }
 
 impl Library {
-    pub(crate) fn new(path: &str) -> Self {
-        Library::FS(FSLibrary::new(Path::new(path)))
+    pub(crate) fn new(path: &str) -> Result<Self> {
+        let lib = if path.starts_with("http://") || path.starts_with("https://") {
+            Library::HTTP(HTTPLibrary::new(&Url::parse(path)?))
+        } else {
+            Library::FS(FSLibrary::new(Path::new(path)))
+        };
+
+        Ok(lib)
     }
 
     pub(crate) async fn get_song(
@@ -63,6 +89,10 @@ impl Library {
     ) -> Result<Pin<Box<dyn Stream<Item = Result<Bytes>> + Send + 'static>>> {
         match self {
             Library::FS(lib) => lib
+                .get_song(uri)
+                .await
+                .map(|s| s.map(|x| x.map_err(Into::into)).boxed()),
+            Library::HTTP(lib) => lib
                 .get_song(uri)
                 .await
                 .map(|s| s.map(|x| x.map_err(Into::into)).boxed()),
@@ -87,5 +117,22 @@ impl FSLibrary {
         let file = File::open(self.root.join(Path::new(&uri))).await?;
 
         Ok(ReaderStream::new(file))
+    }
+}
+
+pub struct HTTPLibrary {
+    base: Url,
+}
+
+// HTTPLibrary implements Library on top of HTTP/HTTPS server.
+impl HTTPLibrary {
+    fn new(base: &Url) -> Self {
+        HTTPLibrary { base: base.clone() }
+    }
+
+    async fn get_song(&self, uri: &str) -> Result<impl Stream<Item = reqwest::Result<Bytes>>> {
+        let stream = reqwest::get(self.base.join(uri)?).await?.bytes_stream();
+
+        Ok(stream)
     }
 }

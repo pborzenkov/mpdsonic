@@ -24,6 +24,12 @@
             {
               extensions = [ "rust-src" ];
             })
+          pkgs.ffmpeg
+          pkgs.pkgconfig
+        ];
+
+        buildInputs = [
+          pkgs.openssl
         ];
       };
     });

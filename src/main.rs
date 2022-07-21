@@ -51,7 +51,7 @@ async fn main() {
     let app = api::get_router(
         auth,
         client,
-        library::Library::new(matches.value_of("mpd-library").unwrap()),
+        library::Library::new(matches.value_of("mpd-library").unwrap()).unwrap(),
     )
     .layer(middleware::from_fn(print_request));
 
