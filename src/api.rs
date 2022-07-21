@@ -17,6 +17,7 @@ use tower_http::cors::{Any, CorsLayer};
 mod browsing;
 mod error;
 mod glue;
+mod playlists;
 mod retrieval;
 mod system;
 mod types;
@@ -57,6 +58,7 @@ pub fn get_router(auth: Authentication, client: Client, lib: Library) -> Router 
             "/rest",
             Router::new()
                 .merge(browsing::get_router())
+                .merge(playlists::get_router())
                 .merge(retrieval::get_router())
                 .merge(system::get_router())
                 .merge(users::get_router()),

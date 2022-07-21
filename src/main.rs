@@ -5,7 +5,7 @@ use axum::{
     middleware::{self, Next},
     response::Response,
 };
-use mpd_client::{commands::definitions::SetBinaryLimit, Client};
+use mpd_client::{commands::SetBinaryLimit, Client};
 use std::{env, net};
 use tokio::net::TcpStream;
 use tracing::{debug, warn};

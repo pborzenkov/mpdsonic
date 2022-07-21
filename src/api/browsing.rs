@@ -8,7 +8,7 @@ use axum::{
     routing::Router,
 };
 use mpd_client::{
-    commands::definitions::{Find, List},
+    commands::{Find, List},
     filter::Filter,
     tag::Tag,
 };
@@ -508,8 +508,8 @@ mod tests {
             expect_ok_json(Some(json!({"musicFolders": {
                 "musicFolder": [
                     {
-                    "id": ROOT_FOLDER,
-                    "name": "Music",
+                        "id": ROOT_FOLDER,
+                        "name": "Music",
                     }
                 ]
                 }

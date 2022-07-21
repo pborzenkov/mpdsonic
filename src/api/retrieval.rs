@@ -13,7 +13,7 @@ use bytes::{BufMut, Bytes, BytesMut};
 use futures::Stream;
 use futures::StreamExt;
 use http::header::{self, HeaderValue};
-use mpd_client::commands::definitions::AlbumArt;
+use mpd_client::commands::{AlbumArt, GetPlaylist};
 use serde::Deserialize;
 use std::{pin::Pin, process::Stdio, sync::Arc};
 use tokio::process::Command;
@@ -30,19 +30,30 @@ pub fn get_router() -> Router {
 #[derive(Clone, Deserialize)]
 struct GetCoverArtQuery {
     #[serde(rename = "id")]
-    song: CoverArtID,
+    cover: CoverArtID,
 }
 
 async fn get_cover_art(
     Extension(state): Extension<Arc<super::State>>,
     Query(params): Query<GetCoverArtQuery>,
 ) -> super::Result<Response> {
-    let mut cover = BytesMut::new();
+    let path = match params.cover {
+        CoverArtID::Song { path } => path,
+        CoverArtID::Playlist { name } => {
+            let songs = state.client.command(GetPlaylist(name)).await?;
 
+            songs
+                .get(0)
+                .map(|s| s.file_path().display().to_string())
+                .ok_or(Error::not_found())?
+        }
+    };
+
+    let mut cover = BytesMut::new();
     loop {
         let resp = state
             .client
-            .command(AlbumArt::new(params.song.path.clone()).offset(cover.len()))
+            .command(AlbumArt::new(path.clone()).offset(cover.len()))
             .await?
             .ok_or(Error::not_found())?;
 

@@ -18,7 +18,7 @@ impl fmt::Display for IDError {
     }
 }
 
-macro_rules! api_id {
+macro_rules! api_id_into_string {
     ($id:ty) => {
         impl TryInto<String> for $id {
             type Error = IDError;
@@ -33,7 +33,11 @@ macro_rules! api_id {
                 Ok(base64::encode(ser.into_inner()))
             }
         }
+    };
+}
 
+macro_rules! api_id_from_string {
+    ($id:ty) => {
         impl TryFrom<String> for $id {
             type Error = IDError;
 
@@ -45,7 +49,11 @@ macro_rules! api_id {
                 <$id>::deserialize(&mut de).map_err(IDError::DeserializationFailed)
             }
         }
+    };
+}
 
+macro_rules! api_id_serialize {
+    ($id:ty) => {
         impl Serialize for $id {
             fn serialize<'a, S>(&self, serializer: S) -> Result<S::Ok, S::Error>
             where
@@ -55,22 +63,6 @@ macro_rules! api_id {
 
                 let val: String = self.clone().try_into().map_err(S::Error::custom)?;
                 serializer.serialize_str(&val)
-            }
-        }
-
-        impl<'de> Deserialize<'de> for $id {
-            fn deserialize<D>(deserializer: D) -> Result<$id, D::Error>
-            where
-                D: serde::Deserializer<'de>,
-            {
-                use serde::de::Error;
-
-                if deserializer.is_human_readable() {
-                    let s: String = serde::Deserialize::deserialize(deserializer)?;
-                    s.try_into().map_err(D::Error::custom)
-                } else {
-                    panic!("did't expect non-human readable form");
-                }
             }
         }
 
@@ -104,6 +96,36 @@ macro_rules! api_id {
                 Ok((attributes, namespace))
             }
         }
+    };
+}
+
+macro_rules! api_id_deserialize {
+    ($id:ty) => {
+        impl<'de> Deserialize<'de> for $id {
+            fn deserialize<D>(deserializer: D) -> Result<$id, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                use serde::de::Error;
+
+                if deserializer.is_human_readable() {
+                    let s: String = serde::Deserialize::deserialize(deserializer)?;
+                    let tmp = s.try_into().map_err(D::Error::custom);
+                    tmp
+                } else {
+                    panic!("did't expect non-human readable form");
+                }
+            }
+        }
+    };
+}
+
+macro_rules! api_id {
+    ($id:ty) => {
+        api_id_into_string!($id);
+        api_id_from_string!($id);
+        api_id_serialize!($id);
+        api_id_deserialize!($id);
     };
 }
 
@@ -155,16 +177,53 @@ impl SongID {
 }
 
 // ArtworkID identifies an artwork
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(remote = "Self")]
-pub struct CoverArtID {
-    pub path: String,
+#[serde(untagged)]
+pub enum CoverArtID {
+    Song { path: String },
+    Playlist { name: String },
 }
 
 impl CoverArtID {
     pub fn new(path: &str) -> Self {
-        CoverArtID {
+        CoverArtID::Song {
             path: path.to_string(),
+        }
+    }
+}
+
+impl Default for CoverArtID {
+    fn default() -> Self {
+        return CoverArtID::new("");
+    }
+}
+
+impl TryFrom<String> for CoverArtID {
+    type Error = IDError;
+
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        use serde_json::de::Deserializer;
+
+        // Handle the way DSub requests playlist cover art (pl-<playlistid>)
+        let s = s.trim_start_matches("pl-");
+        let decoded = base64::decode(&s).map_err(IDError::DecodingFailed)?;
+        let mut de = Deserializer::from_slice(&decoded);
+        CoverArtID::deserialize(&mut de).map_err(IDError::DeserializationFailed)
+    }
+}
+
+// PlaylistID identifies a playlist
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(remote = "Self")]
+pub struct PlaylistID {
+    pub name: String,
+}
+
+impl PlaylistID {
+    pub fn new(name: &str) -> Self {
+        PlaylistID {
+            name: name.to_string(),
         }
     }
 }
@@ -172,4 +231,7 @@ impl CoverArtID {
 api_id!(ArtistID);
 api_id!(AlbumID);
 api_id!(SongID);
-api_id!(CoverArtID);
+api_id_into_string!(CoverArtID);
+api_id_serialize!(CoverArtID);
+api_id_deserialize!(CoverArtID);
+api_id!(PlaylistID);
