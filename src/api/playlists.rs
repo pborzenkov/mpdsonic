@@ -1,15 +1,20 @@
-use super::types::PlaylistID;
+use super::{
+    common::mpd_song_to_subsonic,
+    types::{PlaylistID, Song},
+};
 use axum::{
     extract::{Extension, Query},
     routing::Router,
 };
-use mpd_client::commands::{self, GetPlaylist};
+use mpd_client::commands;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use yaserde_derive::YaSerialize;
 
 pub fn get_router() -> Router {
-    Router::new().route("/getPlaylists.view", super::handler(get_playlists))
+    Router::new()
+        .route("/getPlaylists.view", super::handler(get_playlists))
+        .route("/getPlaylist.view", super::handler(get_playlist))
 }
 
 #[derive(Clone, Deserialize)]
@@ -30,12 +35,12 @@ async fn get_playlists(
     }
 
     let playlists = state.client.command(commands::GetPlaylists).await?;
-    let playlists_info = state
+    let playlists_songs = state
         .client
         .command_list(
             playlists
                 .iter()
-                .map(|p| GetPlaylist(p.name.clone()))
+                .map(|p| commands::GetPlaylist(p.name.clone()))
                 .collect::<Vec<_>>(),
         )
         .await?;
@@ -43,14 +48,14 @@ async fn get_playlists(
     Ok(GetPlaylists {
         playlists: playlists
             .iter()
-            .zip(playlists_info)
-            .map(|(p, info)| Playlist {
+            .zip(playlists_songs)
+            .map(|(p, songs)| Playlist {
                 id: PlaylistID::new(&p.name),
                 name: p.name.clone(),
                 owner: params.u.clone(),
                 public: true,
-                song_count: info.len() as u32,
-                duration: info
+                song_count: songs.len() as u32,
+                duration: songs
                     .iter()
                     .map(|s| s.duration.map(|v| v.as_secs()).unwrap_or(0))
                     .sum(),
@@ -93,10 +98,82 @@ struct Playlist {
     changed: String,
 }
 
+#[derive(Clone, Deserialize)]
+struct GetPlaylistQuery {
+    u: String,
+    #[serde(rename = "id")]
+    playlist: PlaylistID,
+}
+
+async fn get_playlist(
+    Extension(state): Extension<Arc<super::State>>,
+    Query(params): Query<GetPlaylistQuery>,
+) -> super::Result<GetPlaylist> {
+    let (playlists, songs) = state
+        .client
+        .command_list((
+            commands::GetPlaylists,
+            commands::GetPlaylist(params.playlist.name.clone()),
+        ))
+        .await?;
+
+    Ok(GetPlaylist {
+        id: params.playlist.clone(),
+        name: params.playlist.name.clone(),
+        owner: params.u.clone(),
+        public: true,
+        song_count: songs.len() as u32,
+        duration: songs
+            .iter()
+            .map(|s| s.duration.map(|v| v.as_secs()).unwrap_or(0))
+            .sum(),
+        changed: playlists
+            .iter()
+            .find(|&p| p.name == params.playlist.name)
+            .map(|p| p.last_modified.to_rfc3339()),
+        songs: songs.into_iter().map(mpd_song_to_subsonic).collect(),
+    })
+}
+
+#[derive(Serialize, YaSerialize)]
+#[yaserde(rename = "playlist")]
+#[serde(rename_all = "camelCase")]
+struct GetPlaylist {
+    #[yaserde(attribute)]
+    id: PlaylistID,
+    #[yaserde(attribute)]
+    name: String,
+    #[yaserde(attribute)]
+    owner: String,
+    #[yaserde(attribute)]
+    public: bool,
+    #[yaserde(attribute, rename = "songCount")]
+    song_count: u32,
+    #[yaserde(attribute)]
+    duration: u64,
+    #[yaserde(attribute)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    changed: Option<String>,
+    #[yaserde(child, rename = "entry")]
+    #[serde(rename = "entry")]
+    songs: Vec<Song>,
+}
+
+impl super::Reply for GetPlaylist {
+    fn field_name() -> Option<&'static str> {
+        Some("playlist")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{GetPlaylists, Playlist};
-    use crate::api::{expect_ok_json, expect_ok_xml, json, types::PlaylistID, xml};
+    use crate::api::{
+        expect_ok_json, expect_ok_xml, json,
+        playlists::GetPlaylist,
+        types::{AlbumID, ArtistID, CoverArtID, PlaylistID, Song, SongID},
+        xml,
+    };
     use serde_json::json;
 
     #[test]
@@ -155,6 +232,97 @@ mod tests {
                         "duration": 5678,
                         "changed": "2021-06-10T10:19:57.652Z",
                     }
+                ]
+            }
+            })),),
+        );
+    }
+
+    #[test]
+    fn get_playlist() {
+        let get_playlist = GetPlaylist {
+            id: PlaylistID::new("metal"),
+            name: "metal".to_string(),
+            owner: "me".to_string(),
+            public: true,
+            song_count: 10,
+            duration: 1234,
+            changed: Some("2022-07-11T10:19:57.652Z".to_string()),
+            songs: vec![
+                Song {
+                    id: SongID::new("song1"),
+                    title: Some("song1".to_string()),
+                    album: Some("beta".to_string()),
+                    artist: "alpha".to_string(),
+                    track: Some(1),
+                    year: Some(2020),
+                    genre: Some("rock".to_string()),
+                    cover_art: CoverArtID::new("artwork"),
+                    duration: Some(300),
+                    path: "path1".to_string(),
+                    album_id: Some(AlbumID::new("alpha", "beta")),
+                    artist_id: ArtistID::new("alpha"),
+                },
+                Song {
+                    id: SongID::new("song2"),
+                    title: None,
+                    album: Some("beta".to_string()),
+                    artist: "alpha".to_string(),
+                    track: None,
+                    year: None,
+                    genre: None,
+                    cover_art: CoverArtID::new("artwork"),
+                    duration: None,
+                    path: "path2".to_string(),
+                    album_id: Some(AlbumID::new("alpha", "beta")),
+                    artist_id: ArtistID::new("alpha"),
+                },
+            ],
+        };
+        assert_eq!(
+            xml(&get_playlist),
+            expect_ok_xml(Some(
+                r#"<playlist id="eyJuYW1lIjoibWV0YWwifQ==" name="metal" owner="me" public="true" songCount="10" duration="1234" changed="2022-07-11T10:19:57.652Z">
+    <entry id="eyJwYXRoIjoic29uZzEifQ==" title="song1" album="beta" artist="alpha" track="1" year="2020" genre="rock" coverArt="eyJwYXRoIjoiYXJ0d29yayJ9" duration="300" path="path1" albumId="eyJuYW1lIjoiYWxwaGEiLCJhcnRpc3QiOiJiZXRhIn0=" artistId="eyJuYW1lIjoiYWxwaGEifQ==" />
+    <entry id="eyJwYXRoIjoic29uZzIifQ==" album="beta" artist="alpha" coverArt="eyJwYXRoIjoiYXJ0d29yayJ9" path="path2" albumId="eyJuYW1lIjoiYWxwaGEiLCJhcnRpc3QiOiJiZXRhIn0=" artistId="eyJuYW1lIjoiYWxwaGEifQ==" />
+  </playlist>"#
+            ),)
+        );
+
+        assert_eq!(
+            json(&get_playlist),
+            expect_ok_json(Some(json!({"playlist": {
+                "id": "eyJuYW1lIjoibWV0YWwifQ==",
+                "name": "metal",
+                "owner": "me",
+                "public": true,
+                "songCount": 10,
+                "duration": 1234,
+                "changed": "2022-07-11T10:19:57.652Z",
+                "entry": [
+                    {
+                        "id": "eyJwYXRoIjoic29uZzEifQ==",
+                        "title": "song1",
+                        "album": "beta",
+                        "artist": "alpha",
+                        "track": 1,
+                        "year": 2020,
+                        "genre": "rock",
+                        "coverArt": "eyJwYXRoIjoiYXJ0d29yayJ9",
+                        "duration": 300,
+                        "path": "path1",
+                        "albumId": "eyJuYW1lIjoiYWxwaGEiLCJhcnRpc3QiOiJiZXRhIn0=",
+                        "artistId": "eyJuYW1lIjoiYWxwaGEifQ==",
+                    },
+                    {
+                        "id": "eyJwYXRoIjoic29uZzIifQ==",
+                        "album": "beta",
+                        "artist": "alpha",
+                        "coverArt": "eyJwYXRoIjoiYXJ0d29yayJ9",
+                        "path": "path2",
+                        "albumId": "eyJuYW1lIjoiYWxwaGEiLCJhcnRpc3QiOiJiZXRhIn0=",
+                        "artistId": "eyJuYW1lIjoiYWxwaGEifQ==",
+                    },
                 ]
             }
             })),),

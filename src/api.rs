@@ -15,6 +15,7 @@ use std::{convert::Infallible, sync::Arc};
 use tower_http::cors::{Any, CorsLayer};
 
 mod browsing;
+mod common;
 mod error;
 mod glue;
 mod playlists;

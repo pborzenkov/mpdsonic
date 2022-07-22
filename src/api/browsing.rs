@@ -1,5 +1,6 @@
 use super::{
-    types::{AlbumID, ArtistID, CoverArtID, SongID},
+    common::mpd_song_to_subsonic,
+    types::{AlbumID, ArtistID, CoverArtID, Song},
     Error,
 };
 use crate::mpd::Count;
@@ -9,8 +10,7 @@ use axum::{
 };
 use mpd_client::{
     commands::{Find, List},
-    filter::Filter,
-    tag::Tag,
+    Filter, Tag,
 };
 
 use serde::{Deserialize, Serialize};
@@ -364,29 +364,7 @@ async fn get_album(
             .first()
             .map(|s| CoverArtID::new(&s.file_path().display().to_string()))
             .unwrap_or_default(),
-        songs: reply_songs
-            .into_iter()
-            .map(|s| Song {
-                id: SongID::new(&s.file_path().display().to_string()),
-                title: s.title().map(str::to_string),
-                album: param.album.name.clone(),
-                artist: param.album.artist.clone(),
-                track: s
-                    .tags
-                    .get(&Tag::Track)
-                    .and_then(|v| v.first().and_then(|v| v.parse().ok())),
-                year: s
-                    .tags
-                    .get(&Tag::Date)
-                    .and_then(|v| v.first().and_then(|v| v.parse().ok())),
-                genre: s.tags.get(&Tag::Genre).map(|v| v.join(", ")),
-                cover_art: CoverArtID::new(&s.file_path().display().to_string()),
-                duration: s.duration.map(|v| v.as_secs()),
-                path: s.file_path().display().to_string(),
-                album_id: param.album.clone(),
-                artist_id: ArtistID::new(&param.album.artist),
-            })
-            .collect(),
+        songs: reply_songs.into_iter().map(mpd_song_to_subsonic).collect(),
         ..Default::default()
     };
     for (tag, value) in reply_count.fields {
@@ -402,40 +380,6 @@ async fn get_album(
     }
 
     Ok(resp)
-}
-
-#[derive(Serialize, YaSerialize, Debug, Default)]
-#[serde(rename_all = "camelCase")]
-struct Song {
-    #[yaserde(attribute)]
-    id: SongID,
-    #[yaserde(attribute)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    title: Option<String>,
-    #[yaserde(attribute)]
-    album: String,
-    #[yaserde(attribute)]
-    artist: String,
-    #[yaserde(attribute)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    track: Option<u32>,
-    #[yaserde(attribute)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    year: Option<u32>,
-    #[yaserde(attribute)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    genre: Option<String>,
-    #[yaserde(attribute, rename = "coverArt")]
-    cover_art: CoverArtID,
-    #[yaserde(attribute)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    duration: Option<u64>,
-    #[yaserde(attribute)]
-    path: String,
-    #[yaserde(attribute, rename = "albumId")]
-    album_id: AlbumID,
-    #[yaserde(attribute, rename = "artistId")]
-    artist_id: ArtistID,
 }
 
 #[derive(Default, Serialize, YaSerialize)]
@@ -477,11 +421,11 @@ impl super::Reply for GetAlbum {
 mod tests {
     use super::{
         Album, Artist, ArtistInfo2, GetAlbum, GetArtist, GetArtists, GetMusicFolders, Index,
-        MusicFolder, Song, ROOT_FOLDER,
+        MusicFolder, ROOT_FOLDER,
     };
     use crate::api::{
         expect_ok_json, expect_ok_xml, json,
-        types::{AlbumID, ArtistID, CoverArtID, SongID},
+        types::{AlbumID, ArtistID, CoverArtID, Song, SongID},
         xml,
     };
     use serde_json::json;
@@ -709,7 +653,7 @@ mod tests {
                 Song {
                     id: SongID::new("song1"),
                     title: Some("song1".to_string()),
-                    album: "beta".to_string(),
+                    album: Some("beta".to_string()),
                     artist: "alpha".to_string(),
                     track: Some(1),
                     year: Some(2020),
@@ -717,13 +661,13 @@ mod tests {
                     cover_art: CoverArtID::new("artwork"),
                     duration: Some(300),
                     path: "path1".to_string(),
-                    album_id: AlbumID::new("alpha", "beta"),
+                    album_id: Some(AlbumID::new("alpha", "beta")),
                     artist_id: ArtistID::new("alpha"),
                 },
                 Song {
                     id: SongID::new("song2"),
                     title: None,
-                    album: "beta".to_string(),
+                    album: Some("beta".to_string()),
                     artist: "alpha".to_string(),
                     track: None,
                     year: None,
@@ -731,7 +675,7 @@ mod tests {
                     cover_art: CoverArtID::new("artwork"),
                     duration: None,
                     path: "path2".to_string(),
-                    album_id: AlbumID::new("alpha", "beta"),
+                    album_id: Some(AlbumID::new("alpha", "beta")),
                     artist_id: ArtistID::new("alpha"),
                 },
             ],

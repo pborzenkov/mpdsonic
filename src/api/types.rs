@@ -1,6 +1,7 @@
 use base64::DecodeError;
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use yaserde_derive::YaSerialize;
 
 pub enum IDError {
     SerializationFailed(serde_json::Error),
@@ -235,3 +236,38 @@ api_id_into_string!(CoverArtID);
 api_id_serialize!(CoverArtID);
 api_id_deserialize!(CoverArtID);
 api_id!(PlaylistID);
+
+#[derive(Serialize, YaSerialize, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct Song {
+    #[yaserde(attribute)]
+    pub id: SongID,
+    #[yaserde(attribute)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[yaserde(attribute)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub album: Option<String>,
+    #[yaserde(attribute)]
+    pub artist: String,
+    #[yaserde(attribute)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub track: Option<u32>,
+    #[yaserde(attribute)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub year: Option<u32>,
+    #[yaserde(attribute)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub genre: Option<String>,
+    #[yaserde(attribute, rename = "coverArt")]
+    pub cover_art: CoverArtID,
+    #[yaserde(attribute)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub duration: Option<u64>,
+    #[yaserde(attribute)]
+    pub path: String,
+    #[yaserde(attribute, rename = "albumId")]
+    pub album_id: Option<AlbumID>,
+    #[yaserde(attribute, rename = "artistId")]
+    pub artist_id: ArtistID,
+}
