@@ -1,4 +1,5 @@
 use axum::{
+    async_trait,
     body::Body,
     extract::{FromRequest, RequestParts},
     response::{IntoResponse, Response},
@@ -142,6 +143,7 @@ macro_rules! impl_handler {
 
 impl_handler!(T1);
 impl_handler!(T1, T2);
+impl_handler!(T1, T2, T3);
 
 // An adapter that makes Handler into tower_service::Service
 #[derive(Clone)]
@@ -246,6 +248,21 @@ impl IntoReply for () {
     type Reply = Empty;
     fn into_reply(self) -> Self::Reply {
         Empty
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct RawQuery(pub Option<String>);
+
+#[async_trait]
+impl<B> FromRequest<B> for RawQuery
+where
+    B: Send,
+{
+    type Rejection = Infallible;
+    async fn from_request(req: &mut RequestParts<B>) -> Result<Self, Self::Rejection> {
+        let query = req.uri().query().map(|query| query.to_owned());
+        Ok(Self(query))
     }
 }
 

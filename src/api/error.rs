@@ -1,6 +1,7 @@
 use crate::library;
 use axum::extract::rejection;
 use serde::Serialize;
+use std::convert::Infallible;
 use yaserde_derive::YaSerialize;
 
 // An API error response
@@ -54,6 +55,12 @@ impl super::Reply for Error {
     }
 }
 
+impl From<Infallible> for Error {
+    fn from(_: Infallible) -> Self {
+        panic!("Must never happen")
+    }
+}
+
 impl From<rejection::QueryRejection> for Error {
     fn from(_: rejection::QueryRejection) -> Self {
         Error::missing_parameter()
@@ -67,9 +74,9 @@ impl From<rejection::ExtensionRejection> for Error {
 }
 
 impl From<mpd_client::CommandError> for Error {
-    fn from(_: mpd_client::CommandError) -> Self {
+    fn from(err: mpd_client::CommandError) -> Self {
         // TODO: handle specific cases
-        Error::generic_error(None)
+        Error::generic_error(Some(&err.to_string()))
     }
 }
 

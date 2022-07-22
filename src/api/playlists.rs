@@ -1,12 +1,14 @@
 use super::{
     common::mpd_song_to_subsonic,
-    types::{PlaylistID, Song},
+    glue::RawQuery,
+    types::{PlaylistID, Song, SongID},
 };
+use crate::api::error::Error;
 use axum::{
     extract::{Extension, Query},
     routing::Router,
 };
-use mpd_client::commands;
+use mpd_client::commands::{self, AddToPlaylist, RemoveFromPlaylist, SaveQueueAsPlaylist};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use yaserde_derive::YaSerialize;
@@ -15,6 +17,7 @@ pub fn get_router() -> Router {
     Router::new()
         .route("/getPlaylists.view", super::handler(get_playlists))
         .route("/getPlaylist.view", super::handler(get_playlist))
+        .route("/createPlaylist.view", super::handler(create_playlist))
 }
 
 #[derive(Clone, Deserialize)]
@@ -163,6 +166,56 @@ impl super::Reply for GetPlaylist {
     fn field_name() -> Option<&'static str> {
         Some("playlist")
     }
+}
+
+#[derive(Clone, Deserialize, Debug)]
+struct CreatePlaylistQuery {
+    u: String,
+    #[serde(rename = "name")]
+    playlist: String,
+}
+
+async fn create_playlist(
+    Extension(state): Extension<Arc<super::State>>,
+    Query(params): Query<CreatePlaylistQuery>,
+    RawQuery(query): RawQuery,
+) -> super::Result<GetPlaylist> {
+    let songs = url::form_urlencoded::parse(&query.ok_or(Error::missing_parameter())?.into_bytes())
+        .filter_map(|(k, v)| match k.as_ref() {
+            "songId" => SongID::try_from(v.as_ref()).ok(),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    if songs.is_empty() {
+        return Err(Error::missing_parameter());
+    }
+
+    state
+        .client
+        .command(SaveQueueAsPlaylist(params.playlist.clone()))
+        .await?;
+    state
+        .client
+        .command(RemoveFromPlaylist::range(params.playlist.clone(), ..))
+        .await?;
+    state
+        .client
+        .command_list(
+            songs
+                .iter()
+                .map(|s| AddToPlaylist::new(params.playlist.clone(), s.path.clone()))
+                .collect::<Vec<_>>(),
+        )
+        .await?;
+
+    get_playlist(
+        Extension(state),
+        Query(GetPlaylistQuery {
+            u: params.u,
+            playlist: PlaylistID::new(&params.playlist),
+        }),
+    )
+    .await
 }
 
 #[cfg(test)]

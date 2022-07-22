@@ -39,13 +39,13 @@ macro_rules! api_id_into_string {
 
 macro_rules! api_id_from_string {
     ($id:ty) => {
-        impl TryFrom<String> for $id {
+        impl TryFrom<&str> for $id {
             type Error = IDError;
 
-            fn try_from(s: String) -> Result<Self, Self::Error> {
+            fn try_from(s: &str) -> Result<Self, Self::Error> {
                 use serde_json::de::Deserializer;
 
-                let decoded = base64::decode(&s).map_err(IDError::DecodingFailed)?;
+                let decoded = base64::decode(s).map_err(IDError::DecodingFailed)?;
                 let mut de = Deserializer::from_slice(&decoded);
                 <$id>::deserialize(&mut de).map_err(IDError::DeserializationFailed)
             }
@@ -111,7 +111,7 @@ macro_rules! api_id_deserialize {
 
                 if deserializer.is_human_readable() {
                     let s: String = serde::Deserialize::deserialize(deserializer)?;
-                    let tmp = s.try_into().map_err(D::Error::custom);
+                    let tmp = s.as_str().try_into().map_err(D::Error::custom);
                     tmp
                 } else {
                     panic!("did't expect non-human readable form");
@@ -200,10 +200,10 @@ impl Default for CoverArtID {
     }
 }
 
-impl TryFrom<String> for CoverArtID {
+impl TryFrom<&str> for CoverArtID {
     type Error = IDError;
 
-    fn try_from(s: String) -> Result<Self, Self::Error> {
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
         use serde_json::de::Deserializer;
 
         // Handle the way DSub requests playlist cover art (pl-<playlistid>)
