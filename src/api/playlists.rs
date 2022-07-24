@@ -8,7 +8,9 @@ use axum::{
     extract::{Extension, Query},
     routing::Router,
 };
-use mpd_client::commands::{self, AddToPlaylist, RemoveFromPlaylist, SaveQueueAsPlaylist};
+use mpd_client::commands::{
+    self, AddToPlaylist, RemoveFromPlaylist, RenamePlaylist, SaveQueueAsPlaylist,
+};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use yaserde_derive::YaSerialize;
@@ -18,6 +20,7 @@ pub fn get_router() -> Router {
         .route("/getPlaylists.view", super::handler(get_playlists))
         .route("/getPlaylist.view", super::handler(get_playlist))
         .route("/createPlaylist.view", super::handler(create_playlist))
+        .route("/updatePlaylist.view", super::handler(update_playlist))
 }
 
 #[derive(Clone, Deserialize)]
@@ -216,6 +219,70 @@ async fn create_playlist(
         }),
     )
     .await
+}
+
+#[derive(Clone, Deserialize, Debug)]
+struct UpdatePlaylistQuery {
+    #[serde(rename = "playlistId")]
+    playlist: PlaylistID,
+    name: Option<String>,
+}
+
+async fn update_playlist(
+    Extension(state): Extension<Arc<super::State>>,
+    Query(params): Query<UpdatePlaylistQuery>,
+    RawQuery(query): RawQuery,
+) -> super::Result<()> {
+    let query = query.ok_or(Error::missing_parameter())?.into_bytes();
+    let query = url::form_urlencoded::parse(&query);
+    let to_add = query
+        .filter_map(|(k, v)| match k.as_ref() {
+            "songIdToAdd" => SongID::try_from(v.as_ref()).ok(),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let mut to_remove = query
+        .filter_map(|(k, v)| match k.as_ref() {
+            "songIndexToRemove" => v.parse::<usize>().ok(),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    // reverse sort to make sure that song indicies are always valid during removal
+    to_remove.sort_by(|a, b| b.cmp(a));
+
+    if !to_remove.is_empty() {
+        state
+            .client
+            .command_list(
+                to_remove
+                    .iter()
+                    .map(|&idx| RemoveFromPlaylist::position(params.playlist.name.clone(), idx))
+                    .collect::<Vec<_>>(),
+            )
+            .await?;
+    }
+    if !to_add.is_empty() {
+        state
+            .client
+            .command_list(
+                to_add
+                    .iter()
+                    .map(|s| AddToPlaylist::new(params.playlist.name.clone(), s.path.clone()))
+                    .collect::<Vec<_>>(),
+            )
+            .await?;
+    }
+    if let Some(name) = params.name {
+        state
+            .client
+            .command(RenamePlaylist::new(
+                params.playlist.name.clone(),
+                name.clone(),
+            ))
+            .await?;
+    };
+
+    Ok(())
 }
 
 #[cfg(test)]
