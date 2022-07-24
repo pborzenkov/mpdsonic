@@ -9,7 +9,7 @@ use axum::{
     routing::Router,
 };
 use mpd_client::commands::{
-    self, AddToPlaylist, RemoveFromPlaylist, RenamePlaylist, SaveQueueAsPlaylist,
+    self, AddToPlaylist, DeletePlaylist, RemoveFromPlaylist, RenamePlaylist, SaveQueueAsPlaylist,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -21,6 +21,7 @@ pub fn get_router() -> Router {
         .route("/getPlaylist.view", super::handler(get_playlist))
         .route("/createPlaylist.view", super::handler(create_playlist))
         .route("/updatePlaylist.view", super::handler(update_playlist))
+        .route("/deletePlaylist.view", super::handler(delete_playlist))
 }
 
 #[derive(Clone, Deserialize)]
@@ -281,6 +282,24 @@ async fn update_playlist(
             ))
             .await?;
     };
+
+    Ok(())
+}
+
+#[derive(Clone, Deserialize, Debug)]
+struct DeletePlaylistQuery {
+    #[serde(rename = "id")]
+    playlist: PlaylistID,
+}
+
+async fn delete_playlist(
+    Extension(state): Extension<Arc<super::State>>,
+    Query(params): Query<DeletePlaylistQuery>,
+) -> super::Result<()> {
+    state
+        .client
+        .command(DeletePlaylist(params.playlist.name.clone()))
+        .await?;
 
     Ok(())
 }
