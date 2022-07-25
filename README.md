@@ -7,6 +7,8 @@
   - Artists/Albums browsing by ID3 tags
   - Playlists management
   - Supports MPD libraries over local FS and HTTP(S) (NFS is planned)
+
+`mpdsonic` has been tested to work with [DSub][dsub] in "Browse by Tags" mode.
   
 ## Example
 
@@ -23,3 +25,4 @@ $ mpdsonic -a 0.0.0.0 -p 3000 --mpd-address 127.0.0.1:6600 --mpd-library /music
 Licensed under [MIT license](LICENSE)
 
 [mpd]: https://musicpd.org
+[dsub]: https://github.com/daneren2005/Subsonic
