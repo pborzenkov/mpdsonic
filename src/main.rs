@@ -34,31 +34,50 @@ async fn main() {
     tracing_subscriber::fmt::init();
 
     let matches = app::build_app().get_matches_from(env::args_os());
-    let connection = TcpStream::connect(matches.value_of("mpd-address").unwrap())
-        .await
-        .unwrap();
-    let (client, _) =
-        Client::connect_with_password_opt(connection, matches.value_of("mpd-password"))
-            .await
-            .unwrap();
+    let connection = TcpStream::connect(
+        matches
+            .get_one::<String>("mpd-address")
+            .expect("`mpd-address` is required"),
+    )
+    .await
+    .unwrap();
+    let (client, _) = Client::connect_with_password_opt(
+        connection,
+        matches
+            .get_one::<String>("mpd-password")
+            .map(String::as_str),
+    )
+    .await
+    .unwrap();
 
     client.command(SetBinaryLimit(128 * 1024)).await.unwrap();
 
     let auth = api::Authentication::new(
-        matches.value_of("username").unwrap(),
-        matches.value_of("password").unwrap(),
+        matches
+            .get_one::<String>("username")
+            .expect("`username` is required"),
+        matches
+            .get_one::<String>("password")
+            .expect("`password` is required"),
     );
     let app = api::get_router(
         auth,
         client,
-        library::Library::new(matches.value_of("mpd-library").unwrap()).unwrap(),
+        library::Library::new(
+            matches
+                .get_one::<String>("mpd-library")
+                .expect("`mpd-library` is required"),
+        )
+        .unwrap(),
     )
     .layer(middleware::from_fn(print_request));
 
     axum::Server::bind(
         &(
-            matches.value_of_t_or_exit::<net::IpAddr>("address"),
-            matches.value_of_t_or_exit::<u16>("port"),
+            *matches
+                .get_one::<net::IpAddr>("address")
+                .expect("`address` is required"),
+            *matches.get_one::<u16>("port").expect("`port` is required"),
         )
             .into(),
     )
