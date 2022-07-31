@@ -83,6 +83,7 @@
             {
               extensions = [ "rust-src" ];
             })
+          pkgs.ffmpeg
         ];
       };
     });
