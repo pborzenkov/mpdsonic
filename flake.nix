@@ -60,12 +60,23 @@
 
       packages.default = mpdsonic;
 
-      apps.default = inputs.flake-utils.lib.mkApp {
-        drv = mpdsonic;
-      };
+      apps.default = inputs.flake-utils.lib.mkApp
+        {
+          drv = pkgs.symlinkJoin {
+            name = "mpdsonic";
+            paths = [ mpdsonic ];
+
+            buildInputs = [ pkgs.makeWrapper ];
+
+            postBuild = ''
+              wrapProgram $out/bin/mpdsonic \
+                  --prefix PATH : "${pkgs.ffmpeg}/bin"
+            '';
+          };
+        };
 
       devShells.default = pkgs.mkShell {
-        inputsFrom = builtins.attrValues self.checks;
+        inputsFrom = [ mpdsonic ];
 
         nativeBuildInputs = [
           (rust.default.override
@@ -76,6 +87,3 @@
       };
     });
 }
-
-
-
