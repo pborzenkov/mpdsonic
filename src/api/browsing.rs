@@ -86,7 +86,7 @@ async fn get_artists(
         .fold(vec![], |mut artists: Vec<Artist>, (tag, value)| {
             match tag {
                 Tag::ArtistSort => artists.push(Artist {
-                    id: ArtistID::new(&value),
+                    id: ArtistID::new(value),
                     name: value.clone(),
                     album_count: 0,
                 }),
@@ -178,7 +178,7 @@ async fn get_artist(
         .fold(vec![], |mut albums: Vec<Album>, (tag, value)| {
             match &tag {
                 Tag::AlbumSort => albums.push(Album {
-                    id: AlbumID::new(&value, &param.artist.name),
+                    id: AlbumID::new(value, &param.artist.name),
                     name: value.clone(),
                     artist: param.artist.name.clone(),
                     artist_id: param.artist.clone(),
@@ -206,7 +206,7 @@ async fn get_artist(
             let filter = Filter::tag(Tag::Artist, a.artist.clone())
                 .and(Filter::tag(Tag::Album, a.name.clone()));
 
-            Find::new(filter.clone()).window(0..1)
+            Find::new(filter).window(0..1)
         })
         .collect::<Vec<_>>();
     let reply = state.client.command_list(songs).await?;

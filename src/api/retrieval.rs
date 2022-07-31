@@ -45,7 +45,7 @@ async fn get_cover_art(
             songs
                 .get(0)
                 .map(|s| s.file_path().display().to_string())
-                .ok_or(Error::not_found())?
+                .ok_or_else(Error::not_found)?
         }
     };
 
@@ -55,7 +55,7 @@ async fn get_cover_art(
             .client
             .command(AlbumArt::new(path.clone()).offset(cover.len()))
             .await?
-            .ok_or(Error::not_found())?;
+            .ok_or_else(Error::not_found)?;
 
         cover.put_slice(resp.data());
         if cover.len() < resp.size {
@@ -80,7 +80,7 @@ struct StreamQuery {
     format: Option<String>,
 }
 
-static FFMPEG_ARGS: &'static [&'static str] = &[
+static FFMPEG_ARGS: &[&str] = &[
                 "-v",
                 "0",
                 "-i",
@@ -112,7 +112,7 @@ static FFMPEG_ARGS: &'static [&'static str] = &[
                 "opus",
                 "-"
     ];
-static FFMPEG_BITRATES: &'static [u32] = &[96, 112, 128, 160, 192];
+static FFMPEG_BITRATES: &[u32] = &[96, 112, 128, 160, 192];
 
 async fn stream(
     Extension(state): Extension<Arc<super::State>>,
@@ -158,11 +158,11 @@ async fn stream(
             let mut stdin = child
                 .stdin
                 .take()
-                .ok_or(Error::generic_error(Some("cannot capture child's stdin")))?;
+                .ok_or_else(|| Error::generic_error(Some("cannot capture child's stdin")))?;
             let stdout = child
                 .stdout
                 .take()
-                .ok_or(Error::generic_error(Some("cannot capture child's stdout")))?;
+                .ok_or_else(|| Error::generic_error(Some("cannot capture child's stdout")))?;
 
             tokio::spawn(async move {
                 if let Err(err) =
@@ -185,7 +185,7 @@ async fn stream(
         Some(_) => return Err(Error::generic_error(Some("unsupported format"))),
     };
 
-    return Ok(StreamBody::new(output_stream));
+    Ok(StreamBody::new(output_stream))
 }
 
 #[derive(Clone, Deserialize)]

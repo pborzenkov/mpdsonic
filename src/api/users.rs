@@ -15,7 +15,7 @@ struct GetUserQuery {
 async fn get_user(Query(params): Query<GetUserQuery>) -> super::Result<GetUser> {
     match params.u == params.username {
         true => Ok(GetUser {
-            username: params.username.clone(),
+            username: params.username,
             scrobbling_enabled: false,
             admin_role: false,
             settings_role: false,

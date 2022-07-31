@@ -34,7 +34,7 @@ async fn get_playlists(
     Extension(state): Extension<Arc<super::State>>,
     Query(params): Query<GetPlaylistsQuery>,
 ) -> super::Result<GetPlaylists> {
-    if params.u != params.username.unwrap_or(params.u.clone()) {
+    if params.u != params.username.unwrap_or_else(|| params.u.clone()) {
         return Err(super::Error::not_authorized(&format!(
             "{} is not authorized to get details for other users.",
             params.u
@@ -184,12 +184,13 @@ async fn create_playlist(
     Query(params): Query<CreatePlaylistQuery>,
     RawQuery(query): RawQuery,
 ) -> super::Result<GetPlaylist> {
-    let songs = url::form_urlencoded::parse(&query.ok_or(Error::missing_parameter())?.into_bytes())
-        .filter_map(|(k, v)| match k.as_ref() {
-            "songId" => SongID::try_from(v.as_ref()).ok(),
-            _ => None,
-        })
-        .collect::<Vec<_>>();
+    let songs =
+        url::form_urlencoded::parse(&query.ok_or_else(Error::missing_parameter)?.into_bytes())
+            .filter_map(|(k, v)| match k.as_ref() {
+                "songId" => SongID::try_from(v.as_ref()).ok(),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
     if songs.is_empty() {
         return Err(Error::missing_parameter());
     }
@@ -234,7 +235,7 @@ async fn update_playlist(
     Query(params): Query<UpdatePlaylistQuery>,
     RawQuery(query): RawQuery,
 ) -> super::Result<()> {
-    let query = query.ok_or(Error::missing_parameter())?.into_bytes();
+    let query = query.ok_or_else(Error::missing_parameter)?.into_bytes();
     let query = url::form_urlencoded::parse(&query);
     let to_add = query
         .filter_map(|(k, v)| match k.as_ref() {

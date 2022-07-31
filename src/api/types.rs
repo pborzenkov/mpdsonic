@@ -4,17 +4,17 @@ use std::fmt;
 use yaserde_derive::YaSerialize;
 
 pub enum IDError {
-    SerializationFailed(serde_json::Error),
-    DecodingFailed(DecodeError),
-    DeserializationFailed(serde_json::Error),
+    Serialization(serde_json::Error),
+    Decoding(DecodeError),
+    Deserialization(serde_json::Error),
 }
 
 impl fmt::Display for IDError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            IDError::SerializationFailed(e) => write!(f, "Failed to serialize: {}", e),
-            IDError::DecodingFailed(e) => write!(f, "Failed to decode: {}", e),
-            IDError::DeserializationFailed(e) => write!(f, "Failed to deserialize: {}", e),
+            IDError::Serialization(e) => write!(f, "Failed to serialize: {}", e),
+            IDError::Decoding(e) => write!(f, "Failed to decode: {}", e),
+            IDError::Deserialization(e) => write!(f, "Failed to deserialize: {}", e),
         }
     }
 }
@@ -30,7 +30,7 @@ macro_rules! api_id_into_string {
                 let mut ser = Serializer::new(Vec::with_capacity(32));
 
                 // This should never fail
-                <$id>::serialize(&self, &mut ser).map_err(IDError::SerializationFailed)?;
+                <$id>::serialize(&self, &mut ser).map_err(IDError::Serialization)?;
                 Ok(base64::encode(ser.into_inner()))
             }
         }
@@ -45,9 +45,9 @@ macro_rules! api_id_from_string {
             fn try_from(s: &str) -> Result<Self, Self::Error> {
                 use serde_json::de::Deserializer;
 
-                let decoded = base64::decode(s).map_err(IDError::DecodingFailed)?;
+                let decoded = base64::decode(s).map_err(IDError::Decoding)?;
                 let mut de = Deserializer::from_slice(&decoded);
-                <$id>::deserialize(&mut de).map_err(IDError::DeserializationFailed)
+                <$id>::deserialize(&mut de).map_err(IDError::Deserialization)
             }
         }
     };
@@ -196,7 +196,7 @@ impl CoverArtID {
 
 impl Default for CoverArtID {
     fn default() -> Self {
-        return CoverArtID::new("");
+        CoverArtID::new("")
     }
 }
 
@@ -208,9 +208,9 @@ impl TryFrom<&str> for CoverArtID {
 
         // Handle the way DSub requests playlist cover art (pl-<playlistid>)
         let s = s.trim_start_matches("pl-");
-        let decoded = base64::decode(&s).map_err(IDError::DecodingFailed)?;
+        let decoded = base64::decode(&s).map_err(IDError::Decoding)?;
         let mut de = Deserializer::from_slice(&decoded);
-        CoverArtID::deserialize(&mut de).map_err(IDError::DeserializationFailed)
+        CoverArtID::deserialize(&mut de).map_err(IDError::Deserialization)
     }
 }
 
