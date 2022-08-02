@@ -253,9 +253,12 @@ pub struct Song {
     #[yaserde(attribute)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub track: Option<u32>,
+    #[yaserde(attribute, rename = "discNumber")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub disc_number: Option<u32>,
     #[yaserde(attribute)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub year: Option<u32>,
+    pub year: Option<i32>,
     #[yaserde(attribute)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub genre: Option<String>,

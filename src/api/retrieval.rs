@@ -170,9 +170,7 @@ async fn stream(
                 {
                     warn!(path = ?params.song.path, action = "copy", err = ?err);
                 }
-                if let Err(err) = child.kill().await {
-                    warn!(path = ?params.song.path, action = "kill", err = ?err);
-                }
+                drop(stdin);
                 if let Err(err) = child.wait().await {
                     warn!(path = ?params.song.path, action = "wait", err = ?err);
                 }

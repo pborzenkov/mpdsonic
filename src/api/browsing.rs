@@ -1,5 +1,5 @@
 use super::{
-    common::mpd_song_to_subsonic,
+    common::{get_song_year, mpd_song_to_subsonic},
     types::{AlbumID, ArtistID, CoverArtID, Song},
     Error,
 };
@@ -77,7 +77,7 @@ async fn get_artists(
 
     let reply = state
         .client
-        .command(List::new(Tag::AlbumSort).group_by(Tag::ArtistSort))
+        .command(List::new(Tag::Album).group_by(Tag::AlbumArtist))
         .await?;
 
     let index = reply
@@ -85,12 +85,12 @@ async fn get_artists(
         .iter()
         .fold(vec![], |mut artists: Vec<Artist>, (tag, value)| {
             match tag {
-                Tag::ArtistSort => artists.push(Artist {
+                Tag::AlbumArtist => artists.push(Artist {
                     id: ArtistID::new(value),
                     name: value.clone(),
                     album_count: 0,
                 }),
-                Tag::AlbumSort => {
+                Tag::Album => {
                     if let Some(a) = artists.last_mut() {
                         a.album_count += 1;
                     }
@@ -141,7 +141,7 @@ struct Index {
     artists: Vec<Artist>,
 }
 
-#[derive(Serialize, YaSerialize)]
+#[derive(Serialize, YaSerialize, Debug)]
 #[yaserde(rename = "artists")]
 struct GetArtists {
     index: Vec<Index>,
@@ -167,8 +167,8 @@ async fn get_artist(
     let reply = state
         .client
         .command(
-            Count::new(Filter::tag(Tag::Artist, param.artist.name.clone()))
-                .group_by(Tag::AlbumSort),
+            Count::new(Filter::tag(Tag::AlbumArtist, param.artist.name.clone()))
+                .group_by(Tag::Album),
         )
         .await?;
 
@@ -177,7 +177,7 @@ async fn get_artist(
         .iter()
         .fold(vec![], |mut albums: Vec<Album>, (tag, value)| {
             match &tag {
-                Tag::AlbumSort => albums.push(Album {
+                Tag::Album => albums.push(Album {
                     id: AlbumID::new(value, &param.artist.name),
                     name: value.clone(),
                     artist: param.artist.name.clone(),
@@ -203,7 +203,7 @@ async fn get_artist(
     let songs = albums
         .iter()
         .map(|a| {
-            let filter = Filter::tag(Tag::Artist, a.artist.clone())
+            let filter = Filter::tag(Tag::AlbumArtist, a.artist.clone())
                 .and(Filter::tag(Tag::Album, a.name.clone()));
 
             Find::new(filter).window(0..1)
@@ -213,10 +213,7 @@ async fn get_artist(
 
     for (album, songs) in albums.iter_mut().zip(reply) {
         if let Some(song) = songs.first() {
-            album.year = song
-                .tags
-                .get(&Tag::Date)
-                .and_then(|v| v.first().and_then(|d| d.parse().ok()));
+            album.year = get_song_year(song);
             album.genre = song.tags.get(&Tag::Genre).map(|v| v.join(", "));
             album.cover_art = CoverArtID::new(&song.file_path().display().to_string());
         }
@@ -247,7 +244,7 @@ struct Album {
     duration: u64,
     #[yaserde(attribute)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    year: Option<u32>,
+    year: Option<i32>,
     #[yaserde(attribute)]
     #[serde(skip_serializing_if = "Option::is_none")]
     genre: Option<String>,
@@ -255,7 +252,7 @@ struct Album {
     cover_art: CoverArtID,
 }
 
-#[derive(Serialize, YaSerialize)]
+#[derive(Serialize, YaSerialize, Debug)]
 #[yaserde(rename = "artist")]
 #[serde(rename_all = "camelCase")]
 struct GetArtist {
@@ -291,7 +288,7 @@ async fn get_artist_info2(
         .client
         .command(
             List::new(Tag::MusicBrainzArtistId)
-                .filter(Filter::tag(Tag::Artist, param.artist.name.clone())),
+                .filter(Filter::tag(Tag::AlbumArtist, param.artist.name.clone())),
         )
         .await?;
     if reply.fields.len() > 1 {
@@ -335,14 +332,14 @@ async fn get_album(
     let reply_songs = state
         .client
         .command(Find::new(
-            Filter::tag(Tag::Artist, param.album.artist.clone())
+            Filter::tag(Tag::AlbumArtist, param.album.artist.clone())
                 .and(Filter::tag(Tag::Album, param.album.name.clone())),
         ))
         .await?;
     let reply_count = state
         .client
         .command(Count::new(
-            Filter::tag(Tag::Artist, param.album.artist.clone())
+            Filter::tag(Tag::AlbumArtist, param.album.artist.clone())
                 .and(Filter::tag(Tag::Album, param.album.name.clone())),
         ))
         .await?;
@@ -352,11 +349,7 @@ async fn get_album(
         name: param.album.name.clone(),
         artist: param.album.artist.clone(),
         artist_id: ArtistID::new(&param.album.artist),
-        year: reply_songs.first().and_then(|s| {
-            s.tags
-                .get(&Tag::Date)
-                .and_then(|v| v.first().and_then(|d| d.parse().ok()))
-        }),
+        year: reply_songs.first().and_then(get_song_year),
         genre: reply_songs
             .first()
             .and_then(|s| s.tags.get(&Tag::Genre).map(|v| v.join(", "))),
@@ -400,7 +393,7 @@ struct GetAlbum {
     duration: u64,
     #[yaserde(attribute)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    year: Option<u32>,
+    year: Option<i32>,
     #[yaserde(attribute)]
     #[serde(skip_serializing_if = "Option::is_none")]
     genre: Option<String>,
@@ -565,9 +558,8 @@ mod tests {
                     artist_id: ArtistID::new("alpha"),
                     song_count: 20,
                     duration: 450,
-                    year: None,
-                    genre: None,
                     cover_art: CoverArtID::new("artwork2"),
+                    ..Default::default()
                 },
             ],
         };
@@ -656,6 +648,7 @@ mod tests {
                     album: Some("beta".to_string()),
                     artist: "alpha".to_string(),
                     track: Some(1),
+                    disc_number: Some(1),
                     year: Some(2020),
                     genre: Some("rock".to_string()),
                     cover_art: CoverArtID::new("artwork"),
@@ -666,17 +659,13 @@ mod tests {
                 },
                 Song {
                     id: SongID::new("song2"),
-                    title: None,
                     album: Some("beta".to_string()),
                     artist: "alpha".to_string(),
-                    track: None,
-                    year: None,
-                    genre: None,
                     cover_art: CoverArtID::new("artwork"),
-                    duration: None,
                     path: "path2".to_string(),
                     album_id: Some(AlbumID::new("alpha", "beta")),
                     artist_id: ArtistID::new("alpha"),
+                    ..Default::default()
                 },
             ],
         };
@@ -684,7 +673,7 @@ mod tests {
             xml(&get_album),
             expect_ok_xml(Some(
                 r#"<album id="eyJuYW1lIjoiYWxwaGEiLCJhcnRpc3QiOiJiZXRhIn0=" name="beta" artist="alpha" artistId="eyJuYW1lIjoiYWxwaGEifQ==" songCount="2" duration="300" year="2020" genre="rock" coverArt="eyJwYXRoIjoiYXJ0d29yayJ9">
-    <song id="eyJwYXRoIjoic29uZzEifQ==" title="song1" album="beta" artist="alpha" track="1" year="2020" genre="rock" coverArt="eyJwYXRoIjoiYXJ0d29yayJ9" duration="300" path="path1" albumId="eyJuYW1lIjoiYWxwaGEiLCJhcnRpc3QiOiJiZXRhIn0=" artistId="eyJuYW1lIjoiYWxwaGEifQ==" />
+    <song id="eyJwYXRoIjoic29uZzEifQ==" title="song1" album="beta" artist="alpha" track="1" discNumber="1" year="2020" genre="rock" coverArt="eyJwYXRoIjoiYXJ0d29yayJ9" duration="300" path="path1" albumId="eyJuYW1lIjoiYWxwaGEiLCJhcnRpc3QiOiJiZXRhIn0=" artistId="eyJuYW1lIjoiYWxwaGEifQ==" />
     <song id="eyJwYXRoIjoic29uZzIifQ==" album="beta" artist="alpha" coverArt="eyJwYXRoIjoiYXJ0d29yayJ9" path="path2" albumId="eyJuYW1lIjoiYWxwaGEiLCJhcnRpc3QiOiJiZXRhIn0=" artistId="eyJuYW1lIjoiYWxwaGEifQ==" />
   </album>"#
             ),)
@@ -709,6 +698,7 @@ mod tests {
                         "album": "beta",
                         "artist": "alpha",
                         "track": 1,
+                        "discNumber": 1,
                         "year": 2020,
                         "genre": "rock",
                         "coverArt": "eyJwYXRoIjoiYXJ0d29yayJ9",
