@@ -6,7 +6,10 @@ use axum::{
     response::Response,
 };
 use mpd_client::{commands::SetBinaryLimit, Client};
-use std::{env, net};
+use std::{
+    env,
+    net::{self, SocketAddr},
+};
 use tokio::net::TcpStream;
 use tracing::{debug, warn};
 
@@ -36,7 +39,7 @@ async fn main() {
     let matches = app::build_app().get_matches_from(env::args_os());
     let connection = TcpStream::connect(
         matches
-            .get_one::<String>("mpd-address")
+            .get_one::<SocketAddr>("mpd-address")
             .expect("`mpd-address` is required"),
     )
     .await

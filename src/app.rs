@@ -1,4 +1,6 @@
-use clap::{crate_version, Arg, Command};
+use std::net::{IpAddr, SocketAddr};
+
+use clap::{crate_version, value_parser, Arg, Command};
 
 pub fn build_app() -> Command<'static> {
     Command::new("mpdsonic")
@@ -8,6 +10,8 @@ pub fn build_app() -> Command<'static> {
                 .long("address")
                 .short('a')
                 .help("The network address to listen to")
+                .takes_value(true)
+                .value_parser(value_parser!(IpAddr))
                 .default_value("127.0.0.1"),
         )
         .arg(
@@ -15,6 +19,8 @@ pub fn build_app() -> Command<'static> {
                 .long("port")
                 .short('p')
                 .help("The network port to listen to")
+                .takes_value(true)
+                .value_parser(value_parser!(u16))
                 .default_value("3000"),
         )
         .arg(
@@ -39,7 +45,9 @@ pub fn build_app() -> Command<'static> {
             Arg::new("mpd-address")
                 .long("mpd-address")
                 .help("MPD address")
-                .takes_value(true),
+                .takes_value(true)
+                .value_parser(value_parser!(SocketAddr))
+                .default_value("127.0.0.1:6600"),
         )
         .arg(
             Arg::new("mpd-password")
