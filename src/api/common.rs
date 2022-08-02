@@ -35,7 +35,7 @@ where
 static FORMATS: &[&str] = &["%Y-%m-%d", "%Y-%m", "%Y"];
 
 pub(crate) fn get_song_year(song: &responses::Song) -> Option<i32> {
-    let date = get_single_tag::<String>(&song.tags, &Tag::Date)?;
+    let date = get_single_tag::<String>(&song.tags, &Tag::OriginalDate)?;
 
     FORMATS.iter().find_map(|f| {
         let mut parsed = Parsed::new();
