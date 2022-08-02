@@ -1,5 +1,5 @@
 use super::{
-    common::{get_single_tag, mpd_song_to_subsonic},
+    common::{get_song_year, mpd_song_to_subsonic},
     types::{AlbumID, ArtistID, CoverArtID, Song},
     Error,
 };
@@ -213,7 +213,7 @@ async fn get_artist(
 
     for (album, songs) in albums.iter_mut().zip(reply) {
         if let Some(song) = songs.first() {
-            album.year = get_single_tag(&song.tags, &Tag::Date);
+            album.year = get_song_year(&song);
             album.genre = song.tags.get(&Tag::Genre).map(|v| v.join(", "));
             album.cover_art = CoverArtID::new(&song.file_path().display().to_string());
         }
@@ -244,7 +244,7 @@ struct Album {
     duration: u64,
     #[yaserde(attribute)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    year: Option<u32>,
+    year: Option<i32>,
     #[yaserde(attribute)]
     #[serde(skip_serializing_if = "Option::is_none")]
     genre: Option<String>,
@@ -349,9 +349,7 @@ async fn get_album(
         name: param.album.name.clone(),
         artist: param.album.artist.clone(),
         artist_id: ArtistID::new(&param.album.artist),
-        year: reply_songs
-            .first()
-            .and_then(|s| get_single_tag(&s.tags, &Tag::Date)),
+        year: reply_songs.first().and_then(get_song_year),
         genre: reply_songs
             .first()
             .and_then(|s| s.tags.get(&Tag::Genre).map(|v| v.join(", "))),
@@ -395,7 +393,7 @@ struct GetAlbum {
     duration: u64,
     #[yaserde(attribute)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    year: Option<u32>,
+    year: Option<i32>,
     #[yaserde(attribute)]
     #[serde(skip_serializing_if = "Option::is_none")]
     genre: Option<String>,
