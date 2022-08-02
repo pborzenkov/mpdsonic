@@ -213,7 +213,7 @@ async fn get_artist(
 
     for (album, songs) in albums.iter_mut().zip(reply) {
         if let Some(song) = songs.first() {
-            album.year = get_song_year(&song);
+            album.year = get_song_year(song);
             album.genre = song.tags.get(&Tag::Genre).map(|v| v.join(", "));
             album.cover_art = CoverArtID::new(&song.file_path().display().to_string());
         }

@@ -45,5 +45,5 @@ pub(crate) fn get_song_year(song: &responses::Song) -> Option<i32> {
 
             parsed.year
         })
-        .nth(0)
+        .next()
 }
