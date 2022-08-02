@@ -77,7 +77,7 @@ async fn get_artists(
 
     let reply = state
         .client
-        .command(List::new(Tag::AlbumSort).group_by(Tag::ArtistSort))
+        .command(List::new(Tag::Album).group_by(Tag::AlbumArtist))
         .await?;
 
     let index = reply
@@ -85,12 +85,12 @@ async fn get_artists(
         .iter()
         .fold(vec![], |mut artists: Vec<Artist>, (tag, value)| {
             match tag {
-                Tag::ArtistSort => artists.push(Artist {
+                Tag::AlbumArtist => artists.push(Artist {
                     id: ArtistID::new(value),
                     name: value.clone(),
                     album_count: 0,
                 }),
-                Tag::AlbumSort => {
+                Tag::Album => {
                     if let Some(a) = artists.last_mut() {
                         a.album_count += 1;
                     }
@@ -141,7 +141,7 @@ struct Index {
     artists: Vec<Artist>,
 }
 
-#[derive(Serialize, YaSerialize)]
+#[derive(Serialize, YaSerialize, Debug)]
 #[yaserde(rename = "artists")]
 struct GetArtists {
     index: Vec<Index>,
@@ -167,8 +167,8 @@ async fn get_artist(
     let reply = state
         .client
         .command(
-            Count::new(Filter::tag(Tag::Artist, param.artist.name.clone()))
-                .group_by(Tag::AlbumSort),
+            Count::new(Filter::tag(Tag::AlbumArtist, param.artist.name.clone()))
+                .group_by(Tag::Album),
         )
         .await?;
 
@@ -177,7 +177,7 @@ async fn get_artist(
         .iter()
         .fold(vec![], |mut albums: Vec<Album>, (tag, value)| {
             match &tag {
-                Tag::AlbumSort => albums.push(Album {
+                Tag::Album => albums.push(Album {
                     id: AlbumID::new(value, &param.artist.name),
                     name: value.clone(),
                     artist: param.artist.name.clone(),
@@ -203,7 +203,7 @@ async fn get_artist(
     let songs = albums
         .iter()
         .map(|a| {
-            let filter = Filter::tag(Tag::Artist, a.artist.clone())
+            let filter = Filter::tag(Tag::AlbumArtist, a.artist.clone())
                 .and(Filter::tag(Tag::Album, a.name.clone()));
 
             Find::new(filter).window(0..1)
@@ -252,7 +252,7 @@ struct Album {
     cover_art: CoverArtID,
 }
 
-#[derive(Serialize, YaSerialize)]
+#[derive(Serialize, YaSerialize, Debug)]
 #[yaserde(rename = "artist")]
 #[serde(rename_all = "camelCase")]
 struct GetArtist {
@@ -288,7 +288,7 @@ async fn get_artist_info2(
         .client
         .command(
             List::new(Tag::MusicBrainzArtistId)
-                .filter(Filter::tag(Tag::Artist, param.artist.name.clone())),
+                .filter(Filter::tag(Tag::AlbumArtist, param.artist.name.clone())),
         )
         .await?;
     if reply.fields.len() > 1 {
@@ -332,14 +332,14 @@ async fn get_album(
     let reply_songs = state
         .client
         .command(Find::new(
-            Filter::tag(Tag::Artist, param.album.artist.clone())
+            Filter::tag(Tag::AlbumArtist, param.album.artist.clone())
                 .and(Filter::tag(Tag::Album, param.album.name.clone())),
         ))
         .await?;
     let reply_count = state
         .client
         .command(Count::new(
-            Filter::tag(Tag::Artist, param.album.artist.clone())
+            Filter::tag(Tag::AlbumArtist, param.album.artist.clone())
                 .and(Filter::tag(Tag::Album, param.album.name.clone())),
         ))
         .await?;
