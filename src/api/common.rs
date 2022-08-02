@@ -32,18 +32,15 @@ where
         .and_then(|v| v.first().and_then(|v| v.parse().ok()))
 }
 
-static FORMATS: &[&str] = &["%Y-%m-%d", "%Y"];
+static FORMATS: &[&str] = &["%Y-%m-%d", "%Y-%m", "%Y"];
 
 pub(crate) fn get_song_year(song: &responses::Song) -> Option<i32> {
     let date = get_single_tag::<String>(&song.tags, &Tag::Date)?;
 
-    FORMATS
-        .iter()
-        .filter_map(|f| {
-            let mut parsed = Parsed::new();
-            parse(&mut parsed, &date, StrftimeItems::new(f)).ok()?;
+    FORMATS.iter().find_map(|f| {
+        let mut parsed = Parsed::new();
+        parse(&mut parsed, &date, StrftimeItems::new(f)).ok()?;
 
-            parsed.year
-        })
-        .next()
+        parsed.year
+    })
 }
