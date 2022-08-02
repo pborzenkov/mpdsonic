@@ -395,6 +395,7 @@ mod tests {
                     album: Some("beta".to_string()),
                     artist: "alpha".to_string(),
                     track: Some(1),
+                    disc_number: Some(1),
                     year: Some(2020),
                     genre: Some("rock".to_string()),
                     cover_art: CoverArtID::new("artwork"),
@@ -405,17 +406,13 @@ mod tests {
                 },
                 Song {
                     id: SongID::new("song2"),
-                    title: None,
                     album: Some("beta".to_string()),
                     artist: "alpha".to_string(),
-                    track: None,
-                    year: None,
-                    genre: None,
                     cover_art: CoverArtID::new("artwork"),
-                    duration: None,
                     path: "path2".to_string(),
                     album_id: Some(AlbumID::new("alpha", "beta")),
                     artist_id: ArtistID::new("alpha"),
+                    ..Default::default()
                 },
             ],
         };
@@ -423,7 +420,7 @@ mod tests {
             xml(&get_playlist),
             expect_ok_xml(Some(
                 r#"<playlist id="eyJuYW1lIjoibWV0YWwifQ==" name="metal" owner="me" public="true" songCount="10" duration="1234" changed="2022-07-11T10:19:57.652Z">
-    <entry id="eyJwYXRoIjoic29uZzEifQ==" title="song1" album="beta" artist="alpha" track="1" year="2020" genre="rock" coverArt="eyJwYXRoIjoiYXJ0d29yayJ9" duration="300" path="path1" albumId="eyJuYW1lIjoiYWxwaGEiLCJhcnRpc3QiOiJiZXRhIn0=" artistId="eyJuYW1lIjoiYWxwaGEifQ==" />
+    <entry id="eyJwYXRoIjoic29uZzEifQ==" title="song1" album="beta" artist="alpha" track="1" discNumber="1" year="2020" genre="rock" coverArt="eyJwYXRoIjoiYXJ0d29yayJ9" duration="300" path="path1" albumId="eyJuYW1lIjoiYWxwaGEiLCJhcnRpc3QiOiJiZXRhIn0=" artistId="eyJuYW1lIjoiYWxwaGEifQ==" />
     <entry id="eyJwYXRoIjoic29uZzIifQ==" album="beta" artist="alpha" coverArt="eyJwYXRoIjoiYXJ0d29yayJ9" path="path2" albumId="eyJuYW1lIjoiYWxwaGEiLCJhcnRpc3QiOiJiZXRhIn0=" artistId="eyJuYW1lIjoiYWxwaGEifQ==" />
   </playlist>"#
             ),)
@@ -446,6 +443,7 @@ mod tests {
                         "album": "beta",
                         "artist": "alpha",
                         "track": 1,
+                        "discNumber": 1,
                         "year": 2020,
                         "genre": "rock",
                         "coverArt": "eyJwYXRoIjoiYXJ0d29yayJ9",

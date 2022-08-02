@@ -1,5 +1,5 @@
 use super::{
-    common::mpd_song_to_subsonic,
+    common::{get_single_tag, mpd_song_to_subsonic},
     types::{AlbumID, ArtistID, CoverArtID, Song},
     Error,
 };
@@ -213,10 +213,7 @@ async fn get_artist(
 
     for (album, songs) in albums.iter_mut().zip(reply) {
         if let Some(song) = songs.first() {
-            album.year = song
-                .tags
-                .get(&Tag::Date)
-                .and_then(|v| v.first().and_then(|d| d.parse().ok()));
+            album.year = get_single_tag(&song.tags, &Tag::Date);
             album.genre = song.tags.get(&Tag::Genre).map(|v| v.join(", "));
             album.cover_art = CoverArtID::new(&song.file_path().display().to_string());
         }
@@ -352,11 +349,9 @@ async fn get_album(
         name: param.album.name.clone(),
         artist: param.album.artist.clone(),
         artist_id: ArtistID::new(&param.album.artist),
-        year: reply_songs.first().and_then(|s| {
-            s.tags
-                .get(&Tag::Date)
-                .and_then(|v| v.first().and_then(|d| d.parse().ok()))
-        }),
+        year: reply_songs
+            .first()
+            .and_then(|s| get_single_tag(&s.tags, &Tag::Date)),
         genre: reply_songs
             .first()
             .and_then(|s| s.tags.get(&Tag::Genre).map(|v| v.join(", "))),
@@ -565,9 +560,8 @@ mod tests {
                     artist_id: ArtistID::new("alpha"),
                     song_count: 20,
                     duration: 450,
-                    year: None,
-                    genre: None,
                     cover_art: CoverArtID::new("artwork2"),
+                    ..Default::default()
                 },
             ],
         };
@@ -656,6 +650,7 @@ mod tests {
                     album: Some("beta".to_string()),
                     artist: "alpha".to_string(),
                     track: Some(1),
+                    disc_number: Some(1),
                     year: Some(2020),
                     genre: Some("rock".to_string()),
                     cover_art: CoverArtID::new("artwork"),
@@ -666,17 +661,13 @@ mod tests {
                 },
                 Song {
                     id: SongID::new("song2"),
-                    title: None,
                     album: Some("beta".to_string()),
                     artist: "alpha".to_string(),
-                    track: None,
-                    year: None,
-                    genre: None,
                     cover_art: CoverArtID::new("artwork"),
-                    duration: None,
                     path: "path2".to_string(),
                     album_id: Some(AlbumID::new("alpha", "beta")),
                     artist_id: ArtistID::new("alpha"),
+                    ..Default::default()
                 },
             ],
         };
@@ -684,7 +675,7 @@ mod tests {
             xml(&get_album),
             expect_ok_xml(Some(
                 r#"<album id="eyJuYW1lIjoiYWxwaGEiLCJhcnRpc3QiOiJiZXRhIn0=" name="beta" artist="alpha" artistId="eyJuYW1lIjoiYWxwaGEifQ==" songCount="2" duration="300" year="2020" genre="rock" coverArt="eyJwYXRoIjoiYXJ0d29yayJ9">
-    <song id="eyJwYXRoIjoic29uZzEifQ==" title="song1" album="beta" artist="alpha" track="1" year="2020" genre="rock" coverArt="eyJwYXRoIjoiYXJ0d29yayJ9" duration="300" path="path1" albumId="eyJuYW1lIjoiYWxwaGEiLCJhcnRpc3QiOiJiZXRhIn0=" artistId="eyJuYW1lIjoiYWxwaGEifQ==" />
+    <song id="eyJwYXRoIjoic29uZzEifQ==" title="song1" album="beta" artist="alpha" track="1" discNumber="1" year="2020" genre="rock" coverArt="eyJwYXRoIjoiYXJ0d29yayJ9" duration="300" path="path1" albumId="eyJuYW1lIjoiYWxwaGEiLCJhcnRpc3QiOiJiZXRhIn0=" artistId="eyJuYW1lIjoiYWxwaGEifQ==" />
     <song id="eyJwYXRoIjoic29uZzIifQ==" album="beta" artist="alpha" coverArt="eyJwYXRoIjoiYXJ0d29yayJ9" path="path2" albumId="eyJuYW1lIjoiYWxwaGEiLCJhcnRpc3QiOiJiZXRhIn0=" artistId="eyJuYW1lIjoiYWxwaGEifQ==" />
   </album>"#
             ),)
@@ -709,6 +700,7 @@ mod tests {
                         "album": "beta",
                         "artist": "alpha",
                         "track": 1,
+                        "discNumber": 1,
                         "year": 2020,
                         "genre": "rock",
                         "coverArt": "eyJwYXRoIjoiYXJ0d29yayJ9",
