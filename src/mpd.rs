@@ -5,20 +5,20 @@ use mpd_client::{
     tag::Tag,
 };
 
-pub struct Count {
+pub(crate) struct Count {
     filter: Filter,
     group_by: Option<Tag>,
 }
 
 impl Count {
-    pub fn new(filter: Filter) -> Self {
+    pub(crate) fn new(filter: Filter) -> Self {
         Count {
             filter,
             group_by: None,
         }
     }
 
-    pub fn group_by(mut self, group_by: Tag) -> Self {
+    pub(crate) fn group_by(mut self, group_by: Tag) -> Self {
         self.group_by = Some(group_by);
         self
     }

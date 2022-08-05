@@ -2,7 +2,7 @@ use axum::routing::Router;
 use serde::Serialize;
 use yaserde_derive::YaSerialize;
 
-pub fn get_router() -> Router {
+pub(crate) fn get_router() -> Router {
     Router::new()
         .route("/ping.view", super::handler(ping))
         .route("/getLicense.view", super::handler(get_license))

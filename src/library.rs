@@ -1,3 +1,4 @@
+use axum::async_trait;
 use bytes::Bytes;
 use futures::{Stream, StreamExt};
 use reqwest::StatusCode;
@@ -20,7 +21,7 @@ pub(crate) enum Error {
 }
 
 impl Error {
-    pub fn is_not_found(&self) -> bool {
+    pub(crate) fn is_not_found(&self) -> bool {
         match self {
             Error::IO(x) if x.kind() == ErrorKind::NotFound => true,
             Error::Http(x) if x.status().map_or(false, |v| v == StatusCode::NOT_FOUND) => true,
@@ -67,40 +68,26 @@ impl From<reqwest::Error> for Error {
 
 pub(crate) type Result<T> = std::result::Result<T, Error>;
 
-pub enum Library {
-    FS(FSLibrary),
-    Http(HTTPLibrary),
-}
-
-impl Library {
-    pub(crate) fn new(path: &str) -> Result<Self> {
-        let lib = if path.starts_with("http://") || path.starts_with("https://") {
-            Library::Http(HTTPLibrary::new(&Url::parse(path)?))
-        } else {
-            Library::FS(FSLibrary::new(Path::new(path)))
-        };
-
-        Ok(lib)
-    }
-
-    pub(crate) async fn get_song(
+#[async_trait]
+pub(crate) trait Library {
+    async fn get_song(
         &self,
         uri: &str,
-    ) -> Result<Pin<Box<dyn Stream<Item = Result<Bytes>> + Send + 'static>>> {
-        match self {
-            Library::FS(lib) => lib
-                .get_song(uri)
-                .await
-                .map(|s| s.map(|x| x.map_err(Into::into)).boxed()),
-            Library::Http(lib) => lib
-                .get_song(uri)
-                .await
-                .map(|s| s.map(|x| x.map_err(Into::into)).boxed()),
-        }
-    }
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<Bytes>> + Send + 'static>>>;
 }
 
-pub struct FSLibrary {
+pub(crate) fn get_library(path: &str) -> Result<Box<dyn Library + Send + Sync>> {
+    let lib: Box<dyn Library + Send + Sync> =
+        if path.starts_with("http://") || path.starts_with("https://") {
+            Box::new(HTTPLibrary::new(&Url::parse(path)?))
+        } else {
+            Box::new(FSLibrary::new(Path::new(path)))
+        };
+
+    Ok(lib)
+}
+
+struct FSLibrary {
     root: PathBuf,
 }
 
@@ -111,16 +98,24 @@ impl FSLibrary {
             root: root.to_path_buf(),
         }
     }
+}
 
-    async fn get_song(&self, uri: &str) -> Result<ReaderStream<File>> {
+#[async_trait]
+impl Library for FSLibrary {
+    async fn get_song(
+        &self,
+        uri: &str,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<Bytes>> + Send + 'static>>> {
         let uri = uri.to_string();
         let file = File::open(self.root.join(Path::new(&uri))).await?;
 
-        Ok(ReaderStream::new(file))
+        Ok(ReaderStream::new(file)
+            .map(|x| x.map_err(Into::into))
+            .boxed())
     }
 }
 
-pub struct HTTPLibrary {
+struct HTTPLibrary {
     base: Url,
 }
 
@@ -129,10 +124,16 @@ impl HTTPLibrary {
     fn new(base: &Url) -> Self {
         HTTPLibrary { base: base.clone() }
     }
+}
 
-    async fn get_song(&self, uri: &str) -> Result<impl Stream<Item = reqwest::Result<Bytes>>> {
+#[async_trait]
+impl Library for HTTPLibrary {
+    async fn get_song(
+        &self,
+        uri: &str,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<Bytes>> + Send + 'static>>> {
         let stream = reqwest::get(self.base.join(uri)?).await?.bytes_stream();
 
-        Ok(stream)
+        Ok(stream.map(|x| x.map_err(Into::into)).boxed())
     }
 }
