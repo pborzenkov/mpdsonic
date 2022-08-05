@@ -7,7 +7,7 @@ use axum::{
 };
 use clap::Parser;
 use mpd_client::{commands::SetBinaryLimit, Client};
-use std::net::{IpAddr, SocketAddr};
+use std::net::SocketAddr;
 use tokio::net::TcpStream;
 use tracing::{debug, warn};
 
@@ -18,19 +18,22 @@ mod mpd;
 #[derive(Parser)]
 #[clap(author, version, about)]
 struct Args {
-    #[clap(short, long, default_value = "127.0.0.1")]
-    address: IpAddr,
-    #[clap(short, long, default_value = "3000")]
-    port: u16,
-    #[clap(short, long, env = "MPDSONIC_USERNAME")]
+    #[clap(
+        short,
+        long,
+        help = "Address to listen on",
+        default_value = "127.0.0.1:3000"
+    )]
+    address: SocketAddr,
+    #[clap(short, long, help = "Subsonic API username", env = "MPDSONIC_USERNAME")]
     username: String,
-    #[clap(short = 'P', long, env = "MPDSONIC_PASSWORD")]
+    #[clap(short, long, help = "Subsonic API password", env = "MPDSONIC_PASSWORD")]
     password: String,
-    #[clap(long, default_value = "127.0.0.1:6600")]
+    #[clap(long, help = "MPD address", default_value = "127.0.0.1:6600")]
     mpd_address: SocketAddr,
-    #[clap(long, env = "MPDSONIC_MPD_PASSWORD")]
+    #[clap(long, help = "MPD password", env = "MPDSONIC_MPD_PASSWORD")]
     mpd_password: Option<String>,
-    #[clap(long)]
+    #[clap(long, help = "MPD library location")]
     mpd_library: String,
 }
 
@@ -69,7 +72,7 @@ async fn main() {
     )
     .layer(middleware::from_fn(print_request));
 
-    axum::Server::bind(&(args.address, args.port).into())
+    axum::Server::bind(&args.address)
         .serve(app.into_make_service())
         .await
         .unwrap();
