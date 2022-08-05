@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 use yaserde_derive::YaSerialize;
 
-pub enum IDError {
+pub(crate) enum IDError {
     Serialization(serde_json::Error),
     Decoding(DecodeError),
     Deserialization(serde_json::Error),
@@ -133,12 +133,12 @@ macro_rules! api_id {
 // ArtistID identifies an artist
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(remote = "Self")]
-pub struct ArtistID {
-    pub name: String,
+pub(crate) struct ArtistID {
+    pub(crate) name: String,
 }
 
 impl ArtistID {
-    pub fn new(name: &str) -> Self {
+    pub(crate) fn new(name: &str) -> Self {
         ArtistID {
             name: name.to_string(),
         }
@@ -148,13 +148,13 @@ impl ArtistID {
 // AlbumID identifies an album
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(remote = "Self")]
-pub struct AlbumID {
-    pub name: String,
-    pub artist: String,
+pub(crate) struct AlbumID {
+    pub(crate) name: String,
+    pub(crate) artist: String,
 }
 
 impl AlbumID {
-    pub fn new(name: &str, artist: &str) -> Self {
+    pub(crate) fn new(name: &str, artist: &str) -> Self {
         AlbumID {
             name: name.to_string(),
             artist: artist.to_string(),
@@ -165,12 +165,12 @@ impl AlbumID {
 // SongID identifies a song
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(remote = "Self")]
-pub struct SongID {
-    pub path: String,
+pub(crate) struct SongID {
+    pub(crate) path: String,
 }
 
 impl SongID {
-    pub fn new(path: &str) -> Self {
+    pub(crate) fn new(path: &str) -> Self {
         SongID {
             path: path.to_string(),
         }
@@ -181,13 +181,13 @@ impl SongID {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(remote = "Self")]
 #[serde(untagged)]
-pub enum CoverArtID {
+pub(crate) enum CoverArtID {
     Song { path: String },
     Playlist { name: String },
 }
 
 impl CoverArtID {
-    pub fn new(path: &str) -> Self {
+    pub(crate) fn new(path: &str) -> Self {
         CoverArtID::Song {
             path: path.to_string(),
         }
@@ -217,12 +217,12 @@ impl TryFrom<&str> for CoverArtID {
 // PlaylistID identifies a playlist
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(remote = "Self")]
-pub struct PlaylistID {
-    pub name: String,
+pub(crate) struct PlaylistID {
+    pub(crate) name: String,
 }
 
 impl PlaylistID {
-    pub fn new(name: &str) -> Self {
+    pub(crate) fn new(name: &str) -> Self {
         PlaylistID {
             name: name.to_string(),
         }
@@ -239,38 +239,38 @@ api_id!(PlaylistID);
 
 #[derive(Serialize, YaSerialize, Debug, Default)]
 #[serde(rename_all = "camelCase")]
-pub struct Song {
+pub(crate) struct Song {
     #[yaserde(attribute)]
-    pub id: SongID,
-    #[yaserde(attribute)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub title: Option<String>,
+    pub(crate) id: SongID,
     #[yaserde(attribute)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub album: Option<String>,
-    #[yaserde(attribute)]
-    pub artist: String,
+    pub(crate) title: Option<String>,
     #[yaserde(attribute)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub track: Option<u32>,
+    pub(crate) album: Option<String>,
+    #[yaserde(attribute)]
+    pub(crate) artist: String,
+    #[yaserde(attribute)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) track: Option<u32>,
     #[yaserde(attribute, rename = "discNumber")]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub disc_number: Option<u32>,
+    pub(crate) disc_number: Option<u32>,
     #[yaserde(attribute)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub year: Option<i32>,
+    pub(crate) year: Option<i32>,
     #[yaserde(attribute)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub genre: Option<String>,
+    pub(crate) genre: Option<String>,
     #[yaserde(attribute, rename = "coverArt")]
-    pub cover_art: CoverArtID,
+    pub(crate) cover_art: CoverArtID,
     #[yaserde(attribute)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub duration: Option<u64>,
+    pub(crate) duration: Option<u64>,
     #[yaserde(attribute)]
-    pub path: String,
+    pub(crate) path: String,
     #[yaserde(attribute, rename = "albumId")]
-    pub album_id: Option<AlbumID>,
+    pub(crate) album_id: Option<AlbumID>,
     #[yaserde(attribute, rename = "artistId")]
-    pub artist_id: ArtistID,
+    pub(crate) artist_id: ArtistID,
 }

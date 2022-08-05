@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use yaserde_derive::YaSerialize;
 
-pub fn get_router() -> Router {
+pub(crate) fn get_router() -> Router {
     Router::new()
         .route("/getPlaylists.view", super::handler(get_playlists))
         .route("/getPlaylist.view", super::handler(get_playlist))

@@ -7,7 +7,7 @@ use yaserde_derive::YaSerialize;
 // An API error response
 #[derive(Serialize, YaSerialize)]
 #[yaserde(rename = "error")]
-pub struct Error {
+pub(crate) struct Error {
     #[yaserde(attribute)]
     code: u32,
     #[yaserde(attribute)]
@@ -15,33 +15,33 @@ pub struct Error {
 }
 
 impl Error {
-    pub fn new(code: u32, message: &str) -> Self {
+    pub(crate) fn new(code: u32, message: &str) -> Self {
         Error {
             code,
             message: message.to_string(),
         }
     }
 
-    pub fn generic_error(msg: Option<&str>) -> Self {
+    pub(crate) fn generic_error(msg: Option<&str>) -> Self {
         match msg {
             Some(msg) => Error::new(0, &format!("A generic error: {}", msg)),
             None => Error::new(0, "A generic error"),
         }
     }
 
-    pub fn missing_parameter() -> Self {
+    pub(crate) fn missing_parameter() -> Self {
         Error::new(10, "Required parameter is missing")
     }
 
-    pub fn authentication_failed() -> Self {
+    pub(crate) fn authentication_failed() -> Self {
         Error::new(40, "Wrong username or password")
     }
 
-    pub fn not_authorized(msg: &str) -> Self {
+    pub(crate) fn not_authorized(msg: &str) -> Self {
         Error::new(50, msg)
     }
 
-    pub fn not_found() -> Self {
+    pub(crate) fn not_found() -> Self {
         Error::new(70, "The requested data was not found")
     }
 }

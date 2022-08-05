@@ -32,7 +32,7 @@ use error::Error;
 type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Clone)]
-pub struct Authentication {
+pub(crate) struct Authentication {
     username: String,
     password: String,
     encoded_password: String,
@@ -40,11 +40,11 @@ pub struct Authentication {
 
 struct State {
     client: Client,
-    lib: Library,
+    lib: Box<dyn Library + Send + Sync>,
 }
 
 impl Authentication {
-    pub fn new(username: &str, password: &str) -> Self {
+    pub(crate) fn new(username: &str, password: &str) -> Self {
         Authentication {
             username: username.to_string(),
             password: password.to_string(),
@@ -53,7 +53,11 @@ impl Authentication {
     }
 }
 
-pub fn get_router(auth: Authentication, client: Client, lib: Library) -> Router {
+pub(crate) fn get_router(
+    auth: Authentication,
+    client: Client,
+    lib: Box<dyn Library + Send + Sync>,
+) -> Router {
     Router::new()
         .nest(
             "/rest",

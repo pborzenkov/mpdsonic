@@ -20,7 +20,7 @@ use tokio::process::Command;
 use tokio_util::io::{ReaderStream, StreamReader};
 use tracing::warn;
 
-pub fn get_router() -> Router {
+pub(crate) fn get_router() -> Router {
     Router::new()
         .route("/getCoverArt.view", super::raw_handler(get_cover_art))
         .route("/stream.view", super::raw_handler(stream))

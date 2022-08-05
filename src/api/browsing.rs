@@ -20,7 +20,7 @@ use yaserde_derive::YaSerialize;
 
 const ROOT_FOLDER: &str = "/";
 
-pub fn get_router() -> Router {
+pub(crate) fn get_router() -> Router {
     Router::new()
         .route("/getMusicFolders.view", super::handler(get_music_folders))
         .route("/getArtists.view", super::handler(get_artists))

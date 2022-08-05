@@ -2,7 +2,7 @@ use axum::{extract::Query, routing::Router};
 use serde::{Deserialize, Serialize};
 use yaserde_derive::YaSerialize;
 
-pub fn get_router() -> Router {
+pub(crate) fn get_router() -> Router {
     Router::new().route("/getUser.view", super::handler(get_user))
 }
 

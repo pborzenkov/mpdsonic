@@ -17,7 +17,7 @@ use tower_service::Service;
 use yaserde_derive::YaSerialize;
 
 // Trait for async functions that can be used to handle requests and return serializable reply.
-pub trait Handler<T>: Clone + Send + Sized + 'static {
+pub(crate) trait Handler<T>: Clone + Send + Sized + 'static {
     type Future: Future<Output = Response> + Send + 'static;
 
     // Call the handler with the given request
@@ -30,7 +30,7 @@ pub trait Handler<T>: Clone + Send + Sized + 'static {
 }
 
 // Trait for async functions that can be used to handle requests and return raw reply.
-pub trait RawHandler<T>: Clone + Send + Sized + 'static {
+pub(crate) trait RawHandler<T>: Clone + Send + Sized + 'static {
     type Future: Future<Output = Response> + Send + 'static;
 
     // Call the handler with the given request
@@ -147,7 +147,7 @@ impl_handler!(T1, T2, T3);
 
 // An adapter that makes Handler into tower_service::Service
 #[derive(Clone)]
-pub struct IntoService<H, T> {
+pub(crate) struct IntoService<H, T> {
     handler: H,
     _marker: PhantomData<fn() -> T>,
 }
@@ -182,7 +182,7 @@ where
 
 // An adapter that makes RawHandler into tower_service::Service
 #[derive(Clone)]
-pub struct RawIntoService<H, T> {
+pub(crate) struct RawIntoService<H, T> {
     handler: H,
     _marker: PhantomData<fn() -> T>,
 }
@@ -252,7 +252,7 @@ impl IntoReply for () {
 }
 
 #[derive(Clone, Debug)]
-pub struct RawQuery(pub Option<String>);
+pub(crate) struct RawQuery(pub Option<String>);
 
 #[async_trait]
 impl<B> FromRequest<B> for RawQuery
