@@ -4,8 +4,12 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
+    reviewers:
+      - "pborzenkov"
     
   - package-ecosystem: "cargo"
     directory: "/"
     schedule:
       interval: "daily"
+    reviewers:
+      - "pborzenkov"
