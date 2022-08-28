@@ -73,8 +73,8 @@ impl From<rejection::ExtensionRejection> for Error {
     }
 }
 
-impl From<mpd_client::CommandError> for Error {
-    fn from(err: mpd_client::CommandError) -> Self {
+impl From<mpd_client::client::CommandError> for Error {
+    fn from(err: mpd_client::client::CommandError) -> Self {
         // TODO: handle specific cases
         Error::generic_error(Some(&err.to_string()))
     }

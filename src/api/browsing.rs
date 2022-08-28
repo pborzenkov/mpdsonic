@@ -3,19 +3,19 @@ use super::{
     types::{AlbumID, ArtistID, CoverArtID, Song},
     Error,
 };
-use crate::mpd::Count;
 use axum::{
     extract::{Extension, Query},
     routing::Router,
 };
+use itertools::Itertools;
 use mpd_client::{
-    commands::{Find, List},
-    Filter, Tag,
+    commands::{Count, Find, List},
+    filter::Filter,
+    tag::Tag,
 };
 
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tracing::log::warn;
 use yaserde_derive::YaSerialize;
 
 const ROOT_FOLDER: &str = "/";
@@ -77,46 +77,32 @@ async fn get_artists(
 
     let reply = state
         .client
-        .command(List::new(Tag::Album).group_by(Tag::AlbumArtist))
+        .command(List::new(Tag::Album).group_by([Tag::AlbumArtist]))
         .await?;
 
     let index = reply
-        .fields
-        .iter()
-        .fold(vec![], |mut artists: Vec<Artist>, (tag, value)| {
-            match tag {
-                Tag::AlbumArtist => artists.push(Artist {
-                    id: ArtistID::new(value),
-                    name: value.clone(),
-                    album_count: 0,
-                }),
-                Tag::Album => {
-                    if let Some(a) = artists.last_mut() {
-                        a.album_count += 1;
-                    }
-                }
-                _ => (),
-            };
-
-            artists
+        .grouped_values()
+        .map(|(_, [artist])| artist)
+        .dedup_with_count()
+        .map(|(count, artist)| Artist {
+            id: ArtistID::new(artist),
+            name: artist.to_string(),
+            album_count: count,
+        })
+        .group_by(|artist| {
+            artist
+                .name
+                .chars()
+                .next()
+                .map(|c| c.to_uppercase().to_string())
+                .unwrap_or_default()
         })
         .into_iter()
-        .fold(vec![], |mut index: Vec<Index>, a| {
-            let idx_name = match a.name.chars().next() {
-                Some(c) => c.to_uppercase().to_string(),
-                _ => return index,
-            };
-
-            match index.last_mut() {
-                Some(idx) if idx.name == idx_name => idx.artists.push(a),
-                _ => index.push(Index {
-                    name: idx_name,
-                    artists: vec![a],
-                }),
-            };
-
-            index
-        });
+        .map(|(idx, group)| Index {
+            name: idx,
+            artists: group.collect(),
+        })
+        .collect();
 
     Ok(GetArtists { index })
 }
@@ -129,7 +115,7 @@ struct Artist {
     #[yaserde(attribute)]
     name: String,
     #[yaserde(attribute, rename = "albumCount")]
-    album_count: u32,
+    album_count: usize,
 }
 
 #[derive(Serialize, YaSerialize, Debug)]
@@ -173,32 +159,17 @@ async fn get_artist(
         .await?;
 
     let mut albums = reply
-        .fields
         .iter()
-        .fold(vec![], |mut albums: Vec<Album>, (tag, value)| {
-            match &tag {
-                Tag::Album => albums.push(Album {
-                    id: AlbumID::new(value, &param.artist.name),
-                    name: value.clone(),
-                    artist: param.artist.name.clone(),
-                    artist_id: param.artist.clone(),
-                    ..Default::default()
-                }),
-                Tag::Other(t) if t.as_ref() == "songs" => {
-                    if let Some(a) = albums.last_mut() {
-                        a.song_count = value.parse().unwrap_or(0);
-                    }
-                }
-                Tag::Other(t) if t.as_ref() == "playtime" => {
-                    if let Some(a) = albums.last_mut() {
-                        a.duration = value.parse::<f32>().map(|d| d as u64).unwrap_or(0);
-                    }
-                }
-                _ => (),
-            };
-
-            albums
-        });
+        .map(|(album, count)| Album {
+            id: AlbumID::new(album, &param.artist.name),
+            name: album.clone(),
+            artist: param.artist.name.clone(),
+            artist_id: param.artist.clone(),
+            song_count: count.songs,
+            duration: count.playtime.as_secs(),
+            ..Default::default()
+        })
+        .collect::<Vec<_>>();
 
     let songs = albums
         .iter()
@@ -239,7 +210,7 @@ struct Album {
     #[yaserde(attribute, rename = "artistId")]
     artist_id: ArtistID,
     #[yaserde(attribute, rename = "songCount")]
-    song_count: u32,
+    song_count: u64,
     #[yaserde(attribute)]
     duration: u64,
     #[yaserde(attribute)]
@@ -288,19 +259,13 @@ async fn get_artist_info2(
         .client
         .command(
             List::new(Tag::MusicBrainzArtistId)
-                .filter(Filter::tag(Tag::AlbumArtist, param.artist.name.clone())),
+                .filter(Filter::tag(Tag::AlbumArtist, &param.artist.name)),
         )
         .await?;
-    if reply.fields.len() > 1 {
-        warn!(
-            "more than one MusicBrainzArtistID tag for {}, using the first",
-            param.artist.name
-        );
-    }
 
     // TODO: artwork, similar artists
     Ok(ArtistInfo2 {
-        music_brainz_id: reply.fields.first().map(|x| x.1.clone()),
+        music_brainz_id: reply.values().next().map(str::to_string),
     })
 }
 
@@ -344,7 +309,7 @@ async fn get_album(
         ))
         .await?;
 
-    let mut resp = GetAlbum {
+    Ok(GetAlbum {
         id: param.album.clone(),
         name: param.album.name.clone(),
         artist: param.album.artist.clone(),
@@ -358,21 +323,9 @@ async fn get_album(
             .map(|s| CoverArtID::new(&s.file_path().display().to_string()))
             .unwrap_or_default(),
         songs: reply_songs.into_iter().map(mpd_song_to_subsonic).collect(),
-        ..Default::default()
-    };
-    for (tag, value) in reply_count.fields {
-        match tag {
-            Tag::Other(tag) if tag.as_ref() == "songs" => {
-                resp.song_count = value.parse().unwrap_or(0)
-            }
-            Tag::Other(tag) if tag.as_ref() == "playtime" => {
-                resp.duration = value.parse::<f32>().map(|d| d as u64).unwrap_or(0)
-            }
-            _ => (),
-        };
-    }
-
-    Ok(resp)
+        song_count: reply_count.songs,
+        duration: reply_count.playtime.as_secs(),
+    })
 }
 
 #[derive(Default, Serialize, YaSerialize)]
@@ -388,7 +341,7 @@ struct GetAlbum {
     #[yaserde(attribute, rename = "artistId")]
     artist_id: ArtistID,
     #[yaserde(attribute, rename = "songCount")]
-    song_count: u32,
+    song_count: u64,
     #[yaserde(attribute)]
     duration: u64,
     #[yaserde(attribute)]

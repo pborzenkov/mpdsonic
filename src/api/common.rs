@@ -1,6 +1,6 @@
 use super::types::{AlbumID, ArtistID, CoverArtID, Song, SongID};
 use chrono::format::{parse, strftime::StrftimeItems, Parsed};
-use mpd_client::{commands::responses, Tag};
+use mpd_client::{responses, tag::Tag};
 use std::{collections::HashMap, str::FromStr};
 
 pub(crate) fn mpd_song_to_subsonic(song: responses::Song) -> Song {

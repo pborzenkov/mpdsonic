@@ -40,7 +40,8 @@ async fn get_cover_art(
     let path = match params.cover {
         CoverArtID::Song { path } => path,
         CoverArtID::Playlist { name } => {
-            let songs = state.client.command(GetPlaylist(name)).await?;
+            println!("getting cover for playlist!!!");
+            let songs = state.client.command(GetPlaylist(&name)).await?;
 
             songs
                 .get(0)
@@ -49,15 +50,19 @@ async fn get_cover_art(
         }
     };
 
+    println!("path: {}", path);
+
     let mut cover = BytesMut::new();
     loop {
         let resp = state
             .client
-            .command(AlbumArt::new(path.clone()).offset(cover.len()))
+            .command(AlbumArt::new(&path).offset(cover.len()))
             .await?
             .ok_or_else(Error::not_found)?;
 
-        cover.put_slice(resp.data());
+        println!("failed!!!");
+
+        cover.put_slice(&resp.data);
         if cover.len() < resp.size {
             continue;
         }

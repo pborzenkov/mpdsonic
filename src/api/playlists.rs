@@ -47,7 +47,7 @@ async fn get_playlists(
         .command_list(
             playlists
                 .iter()
-                .map(|p| commands::GetPlaylist(p.name.clone()))
+                .map(|p| commands::GetPlaylist(&p.name))
                 .collect::<Vec<_>>(),
         )
         .await?;
@@ -61,12 +61,12 @@ async fn get_playlists(
                 name: p.name.clone(),
                 owner: params.u.clone(),
                 public: true,
-                song_count: songs.len() as u32,
+                song_count: songs.len(),
                 duration: songs
                     .iter()
                     .map(|s| s.duration.map(|v| v.as_secs()).unwrap_or(0))
                     .sum(),
-                changed: p.last_modified.to_rfc3339(),
+                changed: p.last_modified.chrono_datetime().to_rfc3339(),
             })
             .collect(),
     })
@@ -98,7 +98,7 @@ struct Playlist {
     #[yaserde(attribute)]
     public: bool,
     #[yaserde(attribute, rename = "songCount")]
-    song_count: u32,
+    song_count: usize,
     #[yaserde(attribute)]
     duration: u64,
     #[yaserde(attribute)]
@@ -120,7 +120,7 @@ async fn get_playlist(
         .client
         .command_list((
             commands::GetPlaylists,
-            commands::GetPlaylist(params.playlist.name.clone()),
+            commands::GetPlaylist(&params.playlist.name),
         ))
         .await?;
 
@@ -129,7 +129,7 @@ async fn get_playlist(
         name: params.playlist.name.clone(),
         owner: params.u.clone(),
         public: true,
-        song_count: songs.len() as u32,
+        song_count: songs.len(),
         duration: songs
             .iter()
             .map(|s| s.duration.map(|v| v.as_secs()).unwrap_or(0))
@@ -137,7 +137,7 @@ async fn get_playlist(
         changed: playlists
             .iter()
             .find(|&p| p.name == params.playlist.name)
-            .map(|p| p.last_modified.to_rfc3339()),
+            .map(|p| p.last_modified.chrono_datetime().to_rfc3339()),
         songs: songs.into_iter().map(mpd_song_to_subsonic).collect(),
     })
 }
@@ -155,7 +155,7 @@ struct GetPlaylist {
     #[yaserde(attribute)]
     public: bool,
     #[yaserde(attribute, rename = "songCount")]
-    song_count: u32,
+    song_count: usize,
     #[yaserde(attribute)]
     duration: u64,
     #[yaserde(attribute)]
@@ -197,18 +197,18 @@ async fn create_playlist(
 
     state
         .client
-        .command(SaveQueueAsPlaylist(params.playlist.clone()))
+        .command(SaveQueueAsPlaylist(&params.playlist))
         .await?;
     state
         .client
-        .command(RemoveFromPlaylist::range(params.playlist.clone(), ..))
+        .command(RemoveFromPlaylist::range(&params.playlist, ..))
         .await?;
     state
         .client
         .command_list(
             songs
                 .iter()
-                .map(|s| AddToPlaylist::new(params.playlist.clone(), s.path.clone()))
+                .map(|s| AddToPlaylist::new(&params.playlist, &s.path))
                 .collect::<Vec<_>>(),
         )
         .await?;
@@ -258,7 +258,7 @@ async fn update_playlist(
             .command_list(
                 to_remove
                     .iter()
-                    .map(|&idx| RemoveFromPlaylist::position(params.playlist.name.clone(), idx))
+                    .map(|&idx| RemoveFromPlaylist::position(&params.playlist.name, idx))
                     .collect::<Vec<_>>(),
             )
             .await?;
@@ -269,7 +269,7 @@ async fn update_playlist(
             .command_list(
                 to_add
                     .iter()
-                    .map(|s| AddToPlaylist::new(params.playlist.name.clone(), s.path.clone()))
+                    .map(|s| AddToPlaylist::new(&params.playlist.name, &s.path))
                     .collect::<Vec<_>>(),
             )
             .await?;
@@ -277,10 +277,7 @@ async fn update_playlist(
     if let Some(name) = params.name {
         state
             .client
-            .command(RenamePlaylist::new(
-                params.playlist.name.clone(),
-                name.clone(),
-            ))
+            .command(RenamePlaylist::new(&params.playlist.name, &name))
             .await?;
     };
 
@@ -299,7 +296,7 @@ async fn delete_playlist(
 ) -> super::Result<()> {
     state
         .client
-        .command(DeletePlaylist(params.playlist.name.clone()))
+        .command(DeletePlaylist(&params.playlist.name))
         .await?;
 
     Ok(())

@@ -13,7 +13,6 @@ use tracing::{debug, warn};
 
 mod api;
 mod library;
-mod mpd;
 
 #[derive(Parser)]
 #[clap(author, version, about)]
