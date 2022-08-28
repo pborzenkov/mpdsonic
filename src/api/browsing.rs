@@ -152,10 +152,7 @@ async fn get_artist(
 ) -> super::Result<GetArtist> {
     let reply = state
         .client
-        .command(
-            Count::new(Filter::tag(Tag::AlbumArtist, param.artist.name.clone()))
-                .group_by(Tag::Album),
-        )
+        .command(Count::new(Filter::tag(Tag::AlbumArtist, &param.artist.name)).group_by(Tag::Album))
         .await?;
 
     let mut albums = reply
@@ -174,8 +171,8 @@ async fn get_artist(
     let songs = albums
         .iter()
         .map(|a| {
-            let filter = Filter::tag(Tag::AlbumArtist, a.artist.clone())
-                .and(Filter::tag(Tag::Album, a.name.clone()));
+            let filter =
+                Filter::tag(Tag::AlbumArtist, &a.artist).and(Filter::tag(Tag::Album, &a.name));
 
             Find::new(filter).window(0..1)
         })
@@ -297,15 +294,15 @@ async fn get_album(
     let reply_songs = state
         .client
         .command(Find::new(
-            Filter::tag(Tag::AlbumArtist, param.album.artist.clone())
-                .and(Filter::tag(Tag::Album, param.album.name.clone())),
+            Filter::tag(Tag::AlbumArtist, &param.album.artist)
+                .and(Filter::tag(Tag::Album, &param.album.name)),
         ))
         .await?;
     let reply_count = state
         .client
         .command(Count::new(
-            Filter::tag(Tag::AlbumArtist, param.album.artist.clone())
-                .and(Filter::tag(Tag::Album, param.album.name.clone())),
+            Filter::tag(Tag::AlbumArtist, &param.album.artist)
+                .and(Filter::tag(Tag::Album, &param.album.name)),
         ))
         .await?;
 
