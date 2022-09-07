@@ -12,7 +12,7 @@ type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug)]
 pub(crate) enum Error {
-    HTTP(reqwest::Error),
+    Http(reqwest::Error),
     Header(header::InvalidHeaderValue),
     Song,
 }
@@ -25,7 +25,7 @@ impl fmt::Display for Error {
 
 impl From<reqwest::Error> for Error {
     fn from(err: reqwest::Error) -> Self {
-        Error::HTTP(err)
+        Error::Http(err)
     }
 }
 
