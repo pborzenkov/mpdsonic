@@ -1,5 +1,6 @@
-use axum::{extract::Query, routing::Router};
+use axum::{extract::Query, routing::Router, Extension};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use yaserde_derive::YaSerialize;
 
 pub(crate) fn get_router() -> Router {
@@ -12,11 +13,14 @@ struct GetUserQuery {
     username: String,
 }
 
-async fn get_user(Query(params): Query<GetUserQuery>) -> super::Result<GetUser> {
+async fn get_user(
+    Extension(state): Extension<Arc<super::State>>,
+    Query(params): Query<GetUserQuery>,
+) -> super::Result<GetUser> {
     match params.u == params.username {
         true => Ok(GetUser {
             username: params.username,
-            scrobbling_enabled: false,
+            scrobbling_enabled: state.listenbrainz.is_some(),
             admin_role: false,
             settings_role: false,
             download_role: true,

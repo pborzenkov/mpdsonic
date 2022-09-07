@@ -1,4 +1,5 @@
 use super::library::Library;
+use crate::listenbrainz;
 use axum::{
     body::Body,
     extract::{Extension, FromRequest, Query, RequestParts},
@@ -14,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use std::{convert::Infallible, sync::Arc};
 use tower_http::cors::{Any, CorsLayer};
 
+mod annotation;
 mod browsing;
 mod common;
 mod error;
@@ -41,6 +43,7 @@ pub(crate) struct Authentication {
 struct State {
     client: Client,
     lib: Box<dyn Library + Send + Sync>,
+    listenbrainz: Option<listenbrainz::Client>,
 }
 
 impl Authentication {
@@ -57,11 +60,13 @@ pub(crate) fn get_router(
     auth: Authentication,
     client: Client,
     lib: Box<dyn Library + Send + Sync>,
+    listenbrainz: Option<listenbrainz::Client>,
 ) -> Router {
     Router::new()
         .nest(
             "/rest",
             Router::new()
+                .merge(annotation::get_router())
                 .merge(browsing::get_router())
                 .merge(playlists::get_router())
                 .merge(retrieval::get_router())
@@ -72,7 +77,11 @@ pub(crate) fn get_router(
             authenticate(req, next, auth.clone())
         }))
         .layer(CorsLayer::new().allow_origin(Any))
-        .layer(Extension(Arc::new(State { client, lib })))
+        .layer(Extension(Arc::new(State {
+            client,
+            lib,
+            listenbrainz,
+        })))
 }
 
 // handler converts an API handler into a MethodRouter which can be provided to axum's router
@@ -140,7 +149,9 @@ async fn authenticate(req: Request<Body>, next: Next<Body>, auth: Authentication
                 None
             }
             (_, Some(_), Some(_)) => Some(Error::authentication_failed()),
-            _ => Some(Error::missing_parameter()),
+            _ => Some(Error::missing_parameter(
+                "either username or password is missing",
+            )),
         }
     } else {
         aq.err().map(Into::into)

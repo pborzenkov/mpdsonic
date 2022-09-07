@@ -13,6 +13,7 @@ use tracing::{debug, warn};
 
 mod api;
 mod library;
+mod listenbrainz;
 
 #[derive(Parser)]
 #[clap(author, version, about)]
@@ -34,6 +35,8 @@ struct Args {
     mpd_password: Option<String>,
     #[clap(long, help = "MPD library location")]
     mpd_library: String,
+    #[clap(long, help = "ListenBrainz token", env = "MPDSONIC_LISTENBRAINZ_TOKEN")]
+    listenbrainz_token: Option<String>,
 }
 
 async fn print_request(req: Request<Body>, next: Next<Body>) -> Response {
@@ -68,6 +71,8 @@ async fn main() {
         auth,
         client,
         library::get_library(&args.mpd_library).unwrap(),
+        args.listenbrainz_token
+            .and_then(|t| listenbrainz::Client::new(&t).ok()),
     )
     .layer(middleware::from_fn(print_request));
 

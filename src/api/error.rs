@@ -1,4 +1,4 @@
-use crate::library;
+use crate::{library, listenbrainz};
 use axum::extract::rejection;
 use serde::Serialize;
 use std::convert::Infallible;
@@ -29,8 +29,8 @@ impl Error {
         }
     }
 
-    pub(crate) fn missing_parameter() -> Self {
-        Error::new(10, "Required parameter is missing")
+    pub(crate) fn missing_parameter(msg: &str) -> Self {
+        Error::new(10, &format!("Required parameter is missing: {}", msg))
     }
 
     pub(crate) fn authentication_failed() -> Self {
@@ -62,8 +62,8 @@ impl From<Infallible> for Error {
 }
 
 impl From<rejection::QueryRejection> for Error {
-    fn from(_: rejection::QueryRejection) -> Self {
-        Error::missing_parameter()
+    fn from(err: rejection::QueryRejection) -> Self {
+        Error::missing_parameter(&err.to_string())
     }
 }
 
@@ -92,6 +92,12 @@ impl From<library::Error> for Error {
 
 impl From<std::io::Error> for Error {
     fn from(err: std::io::Error) -> Self {
+        Error::generic_error(Some(&err.to_string()))
+    }
+}
+
+impl From<listenbrainz::Error> for Error {
+    fn from(err: listenbrainz::Error) -> Self {
         Error::generic_error(Some(&err.to_string()))
     }
 }
