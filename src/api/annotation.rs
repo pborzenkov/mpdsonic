@@ -33,7 +33,7 @@ async fn scrobble(
             param.song.path,
         )))
         .await?;
-    let song = songs.first().ok_or_else(|| Error::not_found())?;
+    let song = songs.first().ok_or_else(Error::not_found)?;
 
     match param.submission {
         Some(true) => {
