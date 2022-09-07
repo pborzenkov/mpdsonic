@@ -1,5 +1,6 @@
 use super::{types::SongID, Error};
 use axum::{extract::Query, routing::Router, Extension};
+use chrono::Utc;
 use mpd_client::{commands::Find, filter::Filter, tag::Tag};
 use serde::Deserialize;
 use std::sync::Arc;
@@ -13,7 +14,7 @@ pub(crate) fn get_router() -> Router {
 struct ScrobbleQuery {
     #[serde(rename = "id")]
     song: SongID,
-    time: Option<u64>,
+    time: Option<i64>,
     submission: Option<bool>,
 }
 
@@ -38,7 +39,7 @@ async fn scrobble(
     match param.submission {
         Some(true) => {
             listenbrainz
-                .listen(song, param.time.unwrap_or_default())
+                .listen(song, param.time.unwrap_or_else(|| Utc::now().timestamp()))
                 .await?
         }
         _ => listenbrainz.playing_now(song).await?,

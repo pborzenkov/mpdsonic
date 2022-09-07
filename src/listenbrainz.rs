@@ -50,7 +50,7 @@ impl Client {
         })
     }
 
-    pub(crate) async fn listen(&self, song: &Song, timestamp: u64) -> Result<()> {
+    pub(crate) async fn listen(&self, song: &Song, timestamp: i64) -> Result<()> {
         self.submit(Submission::Listen([Listen {
             listened_at: timestamp,
             track_metadata: metadata_from_song(song).ok_or(Error::Song)?,
@@ -122,7 +122,7 @@ fn single_value(tags: &HashMap<Tag, Vec<String>>, tag: Tag) -> Option<String> {
 
 #[derive(Debug, Serialize)]
 pub struct Listen {
-    listened_at: u64,
+    listened_at: i64,
     track_metadata: TrackMetadata,
 }
 
