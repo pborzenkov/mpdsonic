@@ -184,15 +184,18 @@ async fn create_playlist(
     Query(params): Query<CreatePlaylistQuery>,
     RawQuery(query): RawQuery,
 ) -> super::Result<GetPlaylist> {
-    let songs =
-        url::form_urlencoded::parse(&query.ok_or_else(Error::missing_parameter)?.into_bytes())
-            .filter_map(|(k, v)| match k.as_ref() {
-                "songId" => SongID::try_from(v.as_ref()).ok(),
-                _ => None,
-            })
-            .collect::<Vec<_>>();
+    let songs = url::form_urlencoded::parse(
+        &query
+            .ok_or_else(|| Error::missing_parameter("failed to parse URL query"))?
+            .into_bytes(),
+    )
+    .filter_map(|(k, v)| match k.as_ref() {
+        "songId" => SongID::try_from(v.as_ref()).ok(),
+        _ => None,
+    })
+    .collect::<Vec<_>>();
     if songs.is_empty() {
-        return Err(Error::missing_parameter());
+        return Err(Error::missing_parameter("songId is missing"));
     }
 
     state
@@ -235,7 +238,9 @@ async fn update_playlist(
     Query(params): Query<UpdatePlaylistQuery>,
     RawQuery(query): RawQuery,
 ) -> super::Result<()> {
-    let query = query.ok_or_else(Error::missing_parameter)?.into_bytes();
+    let query = query
+        .ok_or_else(|| Error::missing_parameter("failed to parse URL query"))?
+        .into_bytes();
     let query = url::form_urlencoded::parse(&query);
     let to_add = query
         .filter_map(|(k, v)| match k.as_ref() {
