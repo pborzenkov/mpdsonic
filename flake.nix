@@ -35,7 +35,7 @@
       fmt = craneLib.cargoFmt (commonArgs // { });
 
       clippy = craneLib.cargoClippy (commonArgs // {
-        inherit cargoArtifacts;
+        inherit cargoArtifacts fmt;
 
         cargoClippyExtraArgs = "-- --deny warnings";
       });
