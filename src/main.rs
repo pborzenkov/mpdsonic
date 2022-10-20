@@ -70,7 +70,7 @@ async fn main() {
     let app = api::get_router(
         auth,
         client,
-        library::get_library(&args.mpd_library).unwrap(),
+        library::get_library(&args.mpd_library).await.unwrap(),
         args.listenbrainz_token
             .and_then(|t| listenbrainz::Client::new(&t).ok()),
     )
