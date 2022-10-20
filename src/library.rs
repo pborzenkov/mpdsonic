@@ -1,7 +1,6 @@
 use axum::async_trait;
 use bytes::Bytes;
 use futures::{Stream, StreamExt};
-use nfs;
 use nix::{fcntl::OFlag, sys::stat::Mode};
 use reqwest::StatusCode;
 use std::{
@@ -18,7 +17,7 @@ use url::Url;
 #[derive(Debug)]
 pub(crate) enum Error {
     IO(std::io::Error),
-    NFS(nfs::Error),
+    Nfs(nfs::Error),
     Url(url::ParseError),
     Http(reqwest::Error),
 }
@@ -27,7 +26,7 @@ impl Error {
     pub(crate) fn is_not_found(&self) -> bool {
         match self {
             Error::IO(x) if x.kind() == ErrorKind::NotFound => true,
-            Error::NFS(x) if x.into_io().kind() == ErrorKind::NotFound => true,
+            Error::Nfs(x) if x.into_io().kind() == ErrorKind::NotFound => true,
             Error::Http(x) if x.status().map_or(false, |v| v == StatusCode::NOT_FOUND) => true,
             _ => false,
         }
@@ -52,7 +51,7 @@ impl From<Error> for std::io::Error {
     fn from(err: Error) -> Self {
         match err {
             Error::IO(x) => x,
-            Error::NFS(x) => x.into_io(),
+            Error::Nfs(x) => x.into_io(),
             Error::Url(x) => std::io::Error::new(ErrorKind::Other, x),
             Error::Http(x) => std::io::Error::new(ErrorKind::Other, x),
         }
@@ -61,7 +60,7 @@ impl From<Error> for std::io::Error {
 
 impl From<nfs::Error> for Error {
     fn from(err: nfs::Error) -> Self {
-        Error::NFS(err)
+        Error::Nfs(err)
     }
 }
 
@@ -135,7 +134,7 @@ struct HTTPLibrary {
 // HTTPLibrary implements Library on top of HTTP/HTTPS server.
 impl HTTPLibrary {
     fn new(base: Url) -> Self {
-        HTTPLibrary { base: base.clone() }
+        HTTPLibrary { base }
     }
 }
 
