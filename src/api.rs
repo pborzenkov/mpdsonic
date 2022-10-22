@@ -117,31 +117,31 @@ struct AuthenticationQuery {
 }
 
 async fn authenticate(req: Request<Body>, next: Next<Body>, auth: Authentication) -> Response {
-    use crypto::util::fixed_time_eq;
+    use constant_time_eq::constant_time_eq;
 
     let mut req = RequestParts::new(req);
 
     let aq = Query::<AuthenticationQuery>::from_request(&mut req).await;
     let err: Option<Error> = if let Ok(aq) = aq {
-        let valid_user = fixed_time_eq(aq.u.as_bytes(), auth.username.as_bytes());
+        let valid_user = constant_time_eq(aq.u.as_bytes(), auth.username.as_bytes());
 
         match (aq.p.as_deref(), aq.t.as_deref(), aq.s.as_deref()) {
             (Some(p), _, _)
                 if p.starts_with("enc:")
-                    && fixed_time_eq(p.as_bytes(), auth.encoded_password.as_bytes())
+                    && constant_time_eq(p.as_bytes(), auth.encoded_password.as_bytes())
                     && valid_user =>
             {
                 None
             }
             (Some(p), _, _) if p.starts_with("enc:") => Some(Error::authentication_failed()),
             (Some(p), _, _)
-                if fixed_time_eq(p.as_bytes(), auth.password.as_bytes()) && valid_user =>
+                if constant_time_eq(p.as_bytes(), auth.password.as_bytes()) && valid_user =>
             {
                 None
             }
             (Some(_), _, _) => Some(Error::authentication_failed()),
             (_, Some(t), Some(s))
-                if fixed_time_eq(
+                if constant_time_eq(
                     t.as_bytes(),
                     format!("{:?}", md5::compute(auth.password + s)).as_bytes(),
                 ) && valid_user =>
