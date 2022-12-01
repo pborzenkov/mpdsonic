@@ -929,7 +929,7 @@ dependencies = [
 [[package]]
 name = "nfs"
 version = "0.1.0"
-source = "git+https://github.com/pborzenkov/nfs-rs#d2a42456dbb9a1142e1a12b2b5c19b9596c87010"
+source = "git+https://github.com/pborzenkov/nfs-rs#7e50eb5b23784ece24d14114b0db75fca8ed18b3"
 dependencies = [
  "libnfs-sys",
  "nix",
