@@ -1,10 +1,11 @@
 use axum::{
     async_trait,
     body::Body,
-    extract::{FromRequest, RequestParts},
+    extract::FromRequestParts,
     response::{IntoResponse, Response},
 };
 use futures::future::Map;
+use http::request::Parts;
 use serde::Serialize;
 use std::{
     convert::Infallible,
@@ -17,34 +18,34 @@ use tower_service::Service;
 use yaserde_derive::YaSerialize;
 
 // Trait for async functions that can be used to handle requests and return serializable reply.
-pub(crate) trait Handler<T>: Clone + Send + Sized + 'static {
+pub(crate) trait Handler<T, S>: Clone + Send + Sized + 'static {
     type Future: Future<Output = Response> + Send + 'static;
 
     // Call the handler with the given request
-    fn call(self, req: http::Request<Body>) -> Self::Future;
+    fn call(self, req: http::Request<Body>, state: S) -> Self::Future;
 
     // Convert the handler into tower_service::Service
-    fn into_service(self) -> IntoService<Self, T> {
-        IntoService::new(self)
+    fn into_service(self) -> IntoService<Self, T, ()> {
+        IntoService::new(self, ())
     }
 }
 
 // Trait for async functions that can be used to handle requests and return raw reply.
-pub(crate) trait RawHandler<T>: Clone + Send + Sized + 'static {
+pub(crate) trait RawHandler<T, S>: Clone + Send + Sized + 'static {
     type Future: Future<Output = Response> + Send + 'static;
 
     // Call the handler with the given request
-    fn call(self, req: http::Request<Body>) -> Self::Future;
+    fn call(self, req: http::Request<Body>, state: S) -> Self::Future;
 
     // Convert the handler into tower_service::Service
-    fn into_service(self) -> RawIntoService<Self, T> {
-        RawIntoService::new(self)
+    fn into_service(self) -> RawIntoService<Self, T, ()> {
+        RawIntoService::new(self, ())
     }
 }
 
 // Implement Handler trait for all async functions that take 0 arguments and return api::Result<T>
 // where T can be transformed into Reply
-impl<F, Fut, IR, R> Handler<()> for F
+impl<F, Fut, S, IR, R> Handler<(), S> for F
 where
     F: FnOnce() -> Fut + Clone + Send + 'static,
     Fut: Future<Output = super::Result<IR>> + Send,
@@ -53,11 +54,11 @@ where
 {
     type Future = Pin<Box<dyn Future<Output = Response> + Send>>;
 
-    fn call(self, req: http::Request<Body>) -> Self::Future {
+    fn call(self, req: http::Request<Body>, _state: S) -> Self::Future {
         Box::pin(async move {
-            let req = RequestParts::new(req);
+            let (parts, _) = req.into_parts();
 
-            let format = super::serialization_format(&req);
+            let format = super::serialization_format(&parts);
             match self().await {
                 Ok(reply) => super::serialize_reply(reply.into_reply(), &format),
                 Err(error) => super::serialize_reply(error, &format),
@@ -71,25 +72,26 @@ macro_rules! impl_handler {
     // where T can be transformed into Reply
     ( $($ty:ident),* $(,)? ) => {
         #[allow(non_snake_case)]
-        impl<F, Fut, IR, R, $($ty,)*> Handler<($($ty,)*)> for F
+        impl<F, Fut, S, IR, R, $($ty,)*> Handler<($($ty,)*), S> for F
         where
             F: FnOnce($($ty,)*) -> Fut + Clone + Send + 'static,
             Fut: Future<Output = super::Result<IR>> + Send,
             IR: IntoReply<Reply = R>,
             R: super::Reply,
-            $($ty: FromRequest<Body> + Send,)*
-            $(<$ty as FromRequest<Body>>::Rejection: Into<super::Error>,)*
+            S: Send + Sync + 'static,
+            $($ty: FromRequestParts<S> + Send,)*
+            $(<$ty as FromRequestParts<S>>::Rejection: Into<super::Error>,)*
         {
             type Future = Pin<Box<dyn Future<Output = Response> + Send>>;
 
-            fn call(self, req: http::Request<Body>) -> Self::Future {
+            fn call(self, req: http::Request<Body>, state: S) -> Self::Future {
                 Box::pin(async move {
-                    let mut req = RequestParts::new(req);
+                    let (mut parts, _) = req.into_parts();
 
-                    let format = super::serialization_format(&req);
+                    let format = super::serialization_format(&parts);
 
                     $(
-                        let $ty = match $ty::from_request(&mut req).await {
+                        let $ty = match $ty::from_request_parts(&mut parts, &state).await {
                             Ok(value) => value,
                             Err(rejection) => return super::serialize_reply::<super::Error>(rejection.into(), &format),
                         };
@@ -108,24 +110,25 @@ macro_rules! impl_handler {
         //
         // TODO: Drop once negative impls are stabilized
         #[allow(non_snake_case)]
-        impl<F, Fut, IR, $($ty,)*> RawHandler<($($ty,)*)> for F
+        impl<F, Fut, S, IR, $($ty,)*> RawHandler<($($ty,)*), S> for F
         where
             F: FnOnce($($ty,)*) -> Fut + Clone + Send + 'static,
             Fut: Future<Output = super::Result<IR>> + Send,
             IR: IntoResponse,
-            $($ty: FromRequest<Body> + Send,)*
-            $(<$ty as FromRequest<Body>>::Rejection: Into<super::Error>,)*
+            S: Send + Sync + 'static,
+            $($ty: FromRequestParts<S> + Send,)*
+            $(<$ty as FromRequestParts<S>>::Rejection: Into<super::Error>,)*
         {
             type Future = Pin<Box<dyn Future<Output = Response> + Send>>;
 
-            fn call(self, req: http::Request<Body>) -> Self::Future {
+            fn call(self, req: http::Request<Body>, state: S) -> Self::Future {
                 Box::pin(async move {
-                    let mut req = RequestParts::new(req);
+                    let (mut parts, _) = req.into_parts();
 
-                    let format = super::serialization_format(&req);
+                    let format = super::serialization_format(&parts);
 
                     $(
-                        let $ty = match $ty::from_request(&mut req).await {
+                        let $ty = match $ty::from_request_parts(&mut parts, &state).await {
                             Ok(value) => value,
                             Err(rejection) => return super::serialize_reply::<super::Error>(rejection.into(), &format),
                         };
@@ -147,23 +150,26 @@ impl_handler!(T1, T2, T3);
 
 // An adapter that makes Handler into tower_service::Service
 #[derive(Clone)]
-pub(crate) struct IntoService<H, T> {
+pub(crate) struct IntoService<H, T, S> {
     handler: H,
+    state: S,
     _marker: PhantomData<fn() -> T>,
 }
 
-impl<H, T> IntoService<H, T> {
-    fn new(handler: H) -> Self {
+impl<H, T, S> IntoService<H, T, S> {
+    fn new(handler: H, state: S) -> Self {
         Self {
             handler,
+            state,
             _marker: PhantomData,
         }
     }
 }
 
-impl<H, T> Service<http::Request<Body>> for IntoService<H, T>
+impl<H, T, S> Service<http::Request<Body>> for IntoService<H, T, S>
 where
-    H: Handler<T>,
+    S: Clone + Send + Sync,
+    H: Handler<T, S>,
 {
     type Response = Response;
     type Error = Infallible;
@@ -176,29 +182,32 @@ where
     fn call(&mut self, req: http::Request<Body>) -> Self::Future {
         use futures::future::FutureExt;
 
-        H::call(self.handler.clone(), req).map(Ok)
+        H::call(self.handler.clone(), req, self.state.clone()).map(Ok)
     }
 }
 
 // An adapter that makes RawHandler into tower_service::Service
 #[derive(Clone)]
-pub(crate) struct RawIntoService<H, T> {
+pub(crate) struct RawIntoService<H, T, S> {
     handler: H,
+    state: S,
     _marker: PhantomData<fn() -> T>,
 }
 
-impl<H, T> RawIntoService<H, T> {
-    fn new(handler: H) -> Self {
+impl<H, T, S> RawIntoService<H, T, S> {
+    fn new(handler: H, state: S) -> Self {
         Self {
             handler,
+            state,
             _marker: PhantomData,
         }
     }
 }
 
-impl<H, T> Service<http::Request<Body>> for RawIntoService<H, T>
+impl<H, T, S> Service<http::Request<Body>> for RawIntoService<H, T, S>
 where
-    H: RawHandler<T>,
+    S: Clone + Send + Sync,
+    H: RawHandler<T, S>,
 {
     type Response = Response;
     type Error = Infallible;
@@ -211,7 +220,7 @@ where
     fn call(&mut self, req: http::Request<Body>) -> Self::Future {
         use futures::future::FutureExt;
 
-        H::call(self.handler.clone(), req).map(Ok)
+        H::call(self.handler.clone(), req, self.state.clone()).map(Ok)
     }
 }
 
@@ -255,13 +264,13 @@ impl IntoReply for () {
 pub(crate) struct RawQuery(pub Option<String>);
 
 #[async_trait]
-impl<B> FromRequest<B> for RawQuery
+impl<S> FromRequestParts<S> for RawQuery
 where
-    B: Send,
+    S: Send + Sync,
 {
     type Rejection = Infallible;
-    async fn from_request(req: &mut RequestParts<B>) -> Result<Self, Self::Rejection> {
-        let query = req.uri().query().map(|query| query.to_owned());
+    async fn from_request_parts(req: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        let query = req.uri.query().map(|query| query.to_owned());
         Ok(Self(query))
     }
 }

@@ -2,14 +2,17 @@ use super::library::Library;
 use crate::listenbrainz;
 use axum::{
     body::Body,
-    extract::{Extension, FromRequest, Query, RequestParts},
+    extract::{Extension, FromRequestParts, Query},
     http::Request,
     middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::{on_service, MethodFilter, MethodRouter, Router},
 };
 use glue::{Handler, RawHandler};
-use http::header::{self, HeaderValue};
+use http::{
+    header::{self, HeaderValue},
+    request::Parts,
+};
 use mpd_client::Client;
 use serde::{Deserialize, Serialize};
 use std::{convert::Infallible, sync::Arc};
@@ -85,9 +88,9 @@ pub(crate) fn get_router(
 }
 
 // handler converts an API handler into a MethodRouter which can be provided to axum's router
-fn handler<H, T>(handler: H) -> MethodRouter<Body, Infallible>
+fn handler<H, T>(handler: H) -> MethodRouter<(), Body, Infallible>
 where
-    H: Handler<T>,
+    H: Handler<T, ()>,
     T: Clone + 'static,
 {
     on_service(
@@ -97,9 +100,9 @@ where
 }
 
 // raw_handler converts a raw API handler into a MethodRouter which can be provided to axum's router
-fn raw_handler<H, T>(handler: H) -> MethodRouter<Body, Infallible>
+fn raw_handler<H, T>(handler: H) -> MethodRouter<(), Body, Infallible>
 where
-    H: RawHandler<T>,
+    H: RawHandler<T, ()>,
     T: Clone + 'static,
 {
     on_service(
@@ -119,9 +122,9 @@ struct AuthenticationQuery {
 async fn authenticate(req: Request<Body>, next: Next<Body>, auth: Authentication) -> Response {
     use constant_time_eq::constant_time_eq;
 
-    let mut req = RequestParts::new(req);
+    let (mut parts, body) = req.into_parts();
 
-    let aq = Query::<AuthenticationQuery>::from_request(&mut req).await;
+    let aq = Query::<AuthenticationQuery>::from_request_parts(&mut parts, &()).await;
     let err: Option<Error> = if let Ok(aq) = aq {
         let valid_user = constant_time_eq(aq.u.as_bytes(), auth.username.as_bytes());
 
@@ -157,10 +160,10 @@ async fn authenticate(req: Request<Body>, next: Next<Body>, auth: Authentication
         aq.err().map(Into::into)
     };
     if let Some(err) = err {
-        return serialize_reply(err, &serialization_format(&req));
+        return serialize_reply(err, &serialization_format(&parts));
     }
 
-    next.run(req.try_into_request().unwrap_or_default()).await
+    next.run(Request::from_parts(parts, body)).await
 }
 
 // Trait for data that can be returned as API reply
@@ -178,8 +181,8 @@ struct SerializationQuery {
     callback: Option<String>,
 }
 
-fn serialization_format(req: &RequestParts<Body>) -> SerializationQuery {
-    let query = req.uri().query().unwrap_or_default();
+fn serialization_format(req: &Parts) -> SerializationQuery {
+    let query = req.uri.query().unwrap_or_default();
 
     // Official Subsonic server falls back to XML if some of the parameters are invalid or not provided
     serde_urlencoded::from_str::<SerializationQuery>(query).unwrap_or_default()
