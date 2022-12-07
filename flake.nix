@@ -21,16 +21,13 @@
     let
       pkgs = import inputs.nixpkgs { inherit system; overlays = [ (import inputs.rust-overlay) ]; };
       rust = pkgs.rust-bin.stable.latest;
-      libnfs = pkgs.libnfs.overrideAttrs (old: {
-        configureFlags = [ "--enable-pthread" ];
-      });
 
       craneLib = (inputs.crane.mkLib pkgs).overrideToolchain rust.default;
 
       commonArgs = {
         src = ./.;
         nativeBuildInputs = [ pkgs.pkgconfig pkgs.rustPlatform.bindgenHook ];
-        buildInputs = [ pkgs.openssl libnfs ];
+        buildInputs = [ pkgs.openssl pkgs.libnfs ];
       };
 
       cargoArtifacts = craneLib.buildDepsOnly (commonArgs // { });
