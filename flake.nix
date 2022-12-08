@@ -13,7 +13,10 @@
     };
     crane = {
       url = "github:ipetkov/crane";
-      inputs.nixpkgs.follows = "nixpkgs";
+      inputs = {
+        nixpkgs.follows = "nixpkgs";
+        flake-utils.follows = "flake-utils";
+      };
     };
   };
 
@@ -30,18 +33,23 @@
         buildInputs = [ pkgs.openssl pkgs.libnfs ];
       };
 
-      cargoArtifacts = craneLib.buildDepsOnly (commonArgs // { });
+      cargoArtifacts = craneLib.buildDepsOnly (commonArgs // {
+        installCargoArtifactsMode = "use-zstd";
+      });
 
       fmt = craneLib.cargoFmt (commonArgs // { });
 
       clippy = craneLib.cargoClippy (commonArgs // {
         inherit cargoArtifacts fmt;
 
+        installCargoArtifactsMode = "use-zstd";
         cargoClippyExtraArgs = "-- --deny warnings";
       });
 
       test = craneLib.cargoNextest (commonArgs // {
         cargoArtifacts = clippy;
+
+        installCargoArtifactsMode = "use-zstd";
       });
 
       mpdsonic = craneLib.buildPackage (commonArgs // {

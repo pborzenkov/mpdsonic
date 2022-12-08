@@ -208,7 +208,7 @@ impl TryFrom<&str> for CoverArtID {
 
         // Handle the way DSub requests playlist cover art (pl-<playlistid>)
         let s = s.trim_start_matches("pl-");
-        let decoded = base64::decode(&s).map_err(IDError::Decoding)?;
+        let decoded = base64::decode(s).map_err(IDError::Decoding)?;
         let mut de = Deserializer::from_slice(&decoded);
         CoverArtID::deserialize(&mut de).map_err(IDError::Deserialization)
     }
