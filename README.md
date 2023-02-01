@@ -6,7 +6,7 @@
 
   - Artists/Albums browsing by ID3 tags
   - Playlists management
-  - Supports MPD libraries over local FS and HTTP(S) (NFS is planned)
+  - Supports MPD libraries over local FS, HTTP(S) and NFS
 
 `mpdsonic` has been tested to work with [DSub][dsub] in "Browse by Tags" mode.
   
