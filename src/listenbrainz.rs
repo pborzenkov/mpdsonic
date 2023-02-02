@@ -19,7 +19,7 @@ pub(crate) enum Error {
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -40,7 +40,7 @@ impl Client {
         let mut headers = header::HeaderMap::new();
         headers.insert(
             header::AUTHORIZATION,
-            header::HeaderValue::from_str(&format!("Token {}", token))?,
+            header::HeaderValue::from_str(&format!("Token {token}"))?,
         );
 
         Ok(Client {

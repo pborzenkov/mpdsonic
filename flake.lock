@@ -12,11 +12,11 @@
         "rust-overlay": "rust-overlay"
       },
       "locked": {
-        "lastModified": 1670284777,
-        "narHash": "sha256-JF0pc0s4z/X+Iy+lNHOwUQ8I5bz+q7uX4HrKTNIEj24=",
+        "lastModified": 1675295673,
+        "narHash": "sha256-+u4cR9rtwOHpUSQG+2IgnEBzryCnC/Fl7KIkMNY1Xa8=",
         "owner": "ipetkov",
         "repo": "crane",
-        "rev": "2243fb9c872de25cb564a02d324ea6a5b9853052",
+        "rev": "013614dd509e6a4fd127f096192c553ef589f8db",
         "type": "github"
       },
       "original": {
@@ -58,11 +58,11 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1670505603,
-        "narHash": "sha256-7FbxBj9u3rOeCO136gIub+mjBnxsT6NIWCTLQJ1M7LA=",
+        "lastModified": 1675354856,
+        "narHash": "sha256-5nyWEoLOcxDI2rzmS/swrq/QSccgn2vpudXky9wdKDU=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "8de1b140f59ab5eea00fdba1833ff5955cc9987a",
+        "rev": "dd49386fbb87ad344ac339cb3ed4fc6906bca8f8",
         "type": "github"
       },
       "original": {
@@ -91,11 +91,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1670034122,
-        "narHash": "sha256-EqmuOKucPWtMvCZtHraHr3Q3bgVszq1x2PoZtQkUuEk=",
+        "lastModified": 1672712534,
+        "narHash": "sha256-8S0DdMPcbITnlOu0uA81mTo3hgX84wK8S9wS34HEFY4=",
         "owner": "oxalica",
         "repo": "rust-overlay",
-        "rev": "a0d5773275ecd4f141d792d3a0376277c0fc0b65",
+        "rev": "69fb7bf0a8c40e6c4c197fa1816773774c8ac59f",
         "type": "github"
       },
       "original": {
@@ -114,11 +114,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1670466538,
-        "narHash": "sha256-qz3MwPVTHJb62vPRJMXJ+waqjEUHrjTyjXyLHqF0DrE=",
+        "lastModified": 1675304959,
+        "narHash": "sha256-SQNtt71uT++7F3+kHOZ9PEThswk0MnEt6zO2xJdUo/o=",
         "owner": "oxalica",
         "repo": "rust-overlay",
-        "rev": "073959f0687277a54bfaa3ac7a77feb072f88186",
+        "rev": "61ec735acfb1f549237bc525da355bd0b9cc70a3",
         "type": "github"
       },
       "original": {

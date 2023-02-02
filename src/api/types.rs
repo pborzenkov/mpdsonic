@@ -17,9 +17,9 @@ static BASE64: base64::engine::GeneralPurpose = base64::engine::GeneralPurpose::
 impl fmt::Display for IDError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            IDError::Serialization(e) => write!(f, "Failed to serialize: {}", e),
-            IDError::Decoding(e) => write!(f, "Failed to decode: {}", e),
-            IDError::Deserialization(e) => write!(f, "Failed to deserialize: {}", e),
+            IDError::Serialization(e) => write!(f, "Failed to serialize: {e}"),
+            IDError::Decoding(e) => write!(f, "Failed to decode: {e}"),
+            IDError::Deserialization(e) => write!(f, "Failed to deserialize: {e}"),
         }
     }
 }

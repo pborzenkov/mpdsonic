@@ -24,13 +24,13 @@ impl Error {
 
     pub(crate) fn generic_error(msg: Option<&str>) -> Self {
         match msg {
-            Some(msg) => Error::new(0, &format!("A generic error: {}", msg)),
+            Some(msg) => Error::new(0, &format!("A generic error: {msg}")),
             None => Error::new(0, "A generic error"),
         }
     }
 
     pub(crate) fn missing_parameter(msg: &str) -> Self {
-        Error::new(10, &format!("Required parameter is missing: {}", msg))
+        Error::new(10, &format!("Required parameter is missing: {msg}"))
     }
 
     pub(crate) fn authentication_failed() -> Self {
