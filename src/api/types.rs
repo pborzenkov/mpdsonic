@@ -1,4 +1,4 @@
-use base64::DecodeError;
+use base64::{DecodeError, Engine};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use yaserde_derive::YaSerialize;
@@ -8,6 +8,11 @@ pub(crate) enum IDError {
     Decoding(DecodeError),
     Deserialization(serde_json::Error),
 }
+
+static BASE64: base64::engine::GeneralPurpose = base64::engine::GeneralPurpose::new(
+    &base64::alphabet::STANDARD,
+    base64::engine::GeneralPurposeConfig::new(),
+);
 
 impl fmt::Display for IDError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -31,7 +36,7 @@ macro_rules! api_id_into_string {
 
                 // This should never fail
                 <$id>::serialize(&self, &mut ser).map_err(IDError::Serialization)?;
-                Ok(base64::encode(ser.into_inner()))
+                Ok(BASE64.encode(ser.into_inner()))
             }
         }
     };
@@ -45,7 +50,7 @@ macro_rules! api_id_from_string {
             fn try_from(s: &str) -> Result<Self, Self::Error> {
                 use serde_json::de::Deserializer;
 
-                let decoded = base64::decode(s).map_err(IDError::Decoding)?;
+                let decoded = BASE64.decode(s).map_err(IDError::Decoding)?;
                 let mut de = Deserializer::from_slice(&decoded);
                 <$id>::deserialize(&mut de).map_err(IDError::Deserialization)
             }
@@ -208,7 +213,7 @@ impl TryFrom<&str> for CoverArtID {
 
         // Handle the way DSub requests playlist cover art (pl-<playlistid>)
         let s = s.trim_start_matches("pl-");
-        let decoded = base64::decode(s).map_err(IDError::Decoding)?;
+        let decoded = BASE64.decode(s).map_err(IDError::Decoding)?;
         let mut de = Deserializer::from_slice(&decoded);
         CoverArtID::deserialize(&mut de).map_err(IDError::Deserialization)
     }
