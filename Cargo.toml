@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 axum = "0.6"
-base64 = "0.13"
+base64 = "0.21"
 bytes = "1.4"
 chrono = "0.4"
 clap = { version = "4.0", features = ["cargo", "env", "derive"] }
