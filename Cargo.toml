@@ -8,7 +8,7 @@ axum = "0.6"
 base64 = "0.21"
 bytes = "1.4"
 chrono = "0.4"
-clap = { version = "4.0", features = ["cargo", "env", "derive"] }
+clap = { version = "4.1", features = ["cargo", "env", "derive"] }
 constant_time_eq = "0.2"
 futures = "0.3"
 hex = "0.4"
