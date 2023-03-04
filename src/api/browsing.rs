@@ -76,7 +76,9 @@ async fn get_artists(
     };
 
     let reply = state
-        .client
+        .pool
+        .get()
+        .await?
         .command(List::new(Tag::Album).group_by([Tag::AlbumArtist]))
         .await?;
 
@@ -150,8 +152,9 @@ async fn get_artist(
     Extension(state): Extension<Arc<super::State>>,
     Query(param): Query<GetArtistQuery>,
 ) -> super::Result<GetArtist> {
-    let reply = state
-        .client
+    let conn = state.pool.get().await?;
+
+    let reply = conn
         .command(Count::new(Filter::tag(Tag::AlbumArtist, &param.artist.name)).group_by(Tag::Album))
         .await?;
 
@@ -159,7 +162,7 @@ async fn get_artist(
         .iter()
         .map(|(album, count)| Album {
             id: AlbumID::new(album, &param.artist.name),
-            name: album.clone(),
+            name: album.to_string(),
             artist: param.artist.name.clone(),
             artist_id: param.artist.clone(),
             song_count: count.songs,
@@ -177,7 +180,7 @@ async fn get_artist(
             Find::new(filter).window(0..1)
         })
         .collect::<Vec<_>>();
-    let reply = state.client.command_list(songs).await?;
+    let reply = conn.command_list(songs).await?;
 
     for (album, songs) in albums.iter_mut().zip(reply) {
         if let Some(song) = songs.first() {
@@ -253,7 +256,9 @@ async fn get_artist_info2(
     Query(param): Query<GetArtistInfo2Query>,
 ) -> super::Result<ArtistInfo2> {
     let reply = state
-        .client
+        .pool
+        .get()
+        .await?
         .command(
             List::new(Tag::MusicBrainzArtistId)
                 .filter(Filter::tag(Tag::AlbumArtist, &param.artist.name)),
@@ -291,15 +296,15 @@ async fn get_album(
     Extension(state): Extension<Arc<super::State>>,
     Query(param): Query<GetAlbumQuery>,
 ) -> super::Result<GetAlbum> {
-    let reply_songs = state
-        .client
+    let conn = state.pool.get().await?;
+
+    let reply_songs = conn
         .command(Find::new(
             Filter::tag(Tag::AlbumArtist, &param.album.artist)
                 .and(Filter::tag(Tag::Album, &param.album.name)),
         ))
         .await?;
-    let reply_count = state
-        .client
+    let reply_count = conn
         .command(Count::new(
             Filter::tag(Tag::AlbumArtist, &param.album.artist)
                 .and(Filter::tag(Tag::Album, &param.album.name)),

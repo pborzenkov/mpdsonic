@@ -1,4 +1,4 @@
-use crate::{library, listenbrainz};
+use crate::{library, listenbrainz, mpd};
 use axum::extract::rejection;
 use serde::Serialize;
 use std::convert::Infallible;
@@ -76,6 +76,12 @@ impl From<rejection::ExtensionRejection> for Error {
 impl From<mpd_client::client::CommandError> for Error {
     fn from(err: mpd_client::client::CommandError) -> Self {
         // TODO: handle specific cases
+        Error::generic_error(Some(&err.to_string()))
+    }
+}
+
+impl From<bb8::RunError<mpd::Error>> for Error {
+    fn from(err: bb8::RunError<mpd::Error>) -> Self {
         Error::generic_error(Some(&err.to_string()))
     }
 }

@@ -1,4 +1,4 @@
-use super::library::Library;
+use super::{library::Library, mpd::ConnectionManager};
 use crate::listenbrainz;
 use axum::{
     body::Body,
@@ -8,12 +8,12 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{on_service, MethodFilter, MethodRouter, Router},
 };
+use bb8::Pool;
 use glue::{Handler, RawHandler};
 use http::{
     header::{self, HeaderValue},
     request::Parts,
 };
-use mpd_client::Client;
 use serde::{Deserialize, Serialize};
 use std::{convert::Infallible, sync::Arc};
 use tower_http::cors::{Any, CorsLayer};
@@ -44,7 +44,7 @@ pub(crate) struct Authentication {
 }
 
 struct State {
-    client: Client,
+    pool: Pool<ConnectionManager>,
     lib: Box<dyn Library + Send + Sync>,
     listenbrainz: Option<listenbrainz::Client>,
 }
@@ -61,7 +61,7 @@ impl Authentication {
 
 pub(crate) fn get_router(
     auth: Authentication,
-    client: Client,
+    pool: Pool<ConnectionManager>,
     lib: Box<dyn Library + Send + Sync>,
     listenbrainz: Option<listenbrainz::Client>,
 ) -> Router {
@@ -81,7 +81,7 @@ pub(crate) fn get_router(
         }))
         .layer(CorsLayer::new().allow_origin(Any))
         .layer(Extension(Arc::new(State {
-            client,
+            pool,
             lib,
             listenbrainz,
         })))

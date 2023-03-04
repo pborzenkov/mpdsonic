@@ -6,14 +6,13 @@ use axum::{
     response::Response,
 };
 use clap::Parser;
-use mpd_client::{commands::SetBinaryLimit, Client};
-use std::net::SocketAddr;
-use tokio::net::TcpStream;
+use std::{net::SocketAddr, time::Duration};
 use tracing::{debug, warn};
 
 mod api;
 mod library;
 mod listenbrainz;
+mod mpd;
 
 #[derive(Parser)]
 #[clap(author, version, about)]
@@ -59,17 +58,19 @@ async fn main() {
 
     let args = Args::parse();
 
-    let connection = TcpStream::connect(args.mpd_address).await.unwrap();
-    let (client, _) = Client::connect_with_password_opt(connection, args.mpd_password.as_deref())
+    let manager = mpd::ConnectionManager::new(&args.mpd_address, &args.mpd_password);
+    let pool = bb8::Pool::builder()
+        .max_size(8)
+        .connection_timeout(Duration::from_secs(1))
+        .connection_customizer(Box::new(mpd::ConnectionCustomizer))
+        .build(manager)
         .await
         .unwrap();
-
-    client.command(SetBinaryLimit(128 * 1024)).await.unwrap();
 
     let auth = api::Authentication::new(&args.username, &args.password);
     let app = api::get_router(
         auth,
-        client,
+        pool,
         library::get_library(&args.mpd_library).await.unwrap(),
         args.listenbrainz_token
             .and_then(|t| listenbrainz::Client::new(&t).ok()),

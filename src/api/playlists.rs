@@ -41,9 +41,16 @@ async fn get_playlists(
         )));
     }
 
-    let playlists = state.client.command(commands::GetPlaylists).await?;
+    let playlists = state
+        .pool
+        .get()
+        .await?
+        .command(commands::GetPlaylists)
+        .await?;
     let playlists_songs = state
-        .client
+        .pool
+        .get()
+        .await?
         .command_list(
             playlists
                 .iter()
@@ -117,7 +124,9 @@ async fn get_playlist(
     Query(params): Query<GetPlaylistQuery>,
 ) -> super::Result<GetPlaylist> {
     let (playlists, songs) = state
-        .client
+        .pool
+        .get()
+        .await?
         .command_list((
             commands::GetPlaylists,
             commands::GetPlaylist(&params.playlist.name),
@@ -198,23 +207,19 @@ async fn create_playlist(
         return Err(Error::missing_parameter("songId is missing"));
     }
 
-    state
-        .client
-        .command(SaveQueueAsPlaylist(&params.playlist))
+    let conn = state.pool.get().await?;
+
+    conn.command(SaveQueueAsPlaylist(&params.playlist)).await?;
+    conn.command(RemoveFromPlaylist::range(&params.playlist, ..))
         .await?;
-    state
-        .client
-        .command(RemoveFromPlaylist::range(&params.playlist, ..))
-        .await?;
-    state
-        .client
-        .command_list(
-            songs
-                .iter()
-                .map(|s| AddToPlaylist::new(&params.playlist, &s.path))
-                .collect::<Vec<_>>(),
-        )
-        .await?;
+    conn.command_list(
+        songs
+            .iter()
+            .map(|s| AddToPlaylist::new(&params.playlist, &s.path))
+            .collect::<Vec<_>>(),
+    )
+    .await?;
+    drop(conn);
 
     get_playlist(
         Extension(state),
@@ -257,32 +262,27 @@ async fn update_playlist(
     // reverse sort to make sure that song indicies are always valid during removal
     to_remove.sort_by(|a, b| b.cmp(a));
 
+    let conn = state.pool.get().await?;
     if !to_remove.is_empty() {
-        state
-            .client
-            .command_list(
-                to_remove
-                    .iter()
-                    .map(|&idx| RemoveFromPlaylist::position(&params.playlist.name, idx))
-                    .collect::<Vec<_>>(),
-            )
-            .await?;
+        conn.command_list(
+            to_remove
+                .iter()
+                .map(|&idx| RemoveFromPlaylist::position(&params.playlist.name, idx))
+                .collect::<Vec<_>>(),
+        )
+        .await?;
     }
     if !to_add.is_empty() {
-        state
-            .client
-            .command_list(
-                to_add
-                    .iter()
-                    .map(|s| AddToPlaylist::new(&params.playlist.name, &s.path))
-                    .collect::<Vec<_>>(),
-            )
-            .await?;
+        conn.command_list(
+            to_add
+                .iter()
+                .map(|s| AddToPlaylist::new(&params.playlist.name, &s.path))
+                .collect::<Vec<_>>(),
+        )
+        .await?;
     }
     if let Some(name) = params.name {
-        state
-            .client
-            .command(RenamePlaylist::new(&params.playlist.name, &name))
+        conn.command(RenamePlaylist::new(&params.playlist.name, &name))
             .await?;
     };
 
@@ -300,7 +300,9 @@ async fn delete_playlist(
     Query(params): Query<DeletePlaylistQuery>,
 ) -> super::Result<()> {
     state
-        .client
+        .pool
+        .get()
+        .await?
         .command(DeletePlaylist(&params.playlist.name))
         .await?;
 

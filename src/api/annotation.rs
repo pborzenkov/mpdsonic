@@ -28,7 +28,9 @@ async fn scrobble(
         .ok_or_else(|| Error::generic_error(Some("ListenBrainz client is not configured")))?;
 
     let songs = state
-        .client
+        .pool
+        .get()
+        .await?
         .command(Find::new(Filter::tag(
             Tag::Other("file".into()),
             param.song.path,
