@@ -1,7 +1,6 @@
 use axum::async_trait;
 use bytes::Bytes;
 use futures::{Stream, StreamExt};
-use nix::{fcntl::OFlag, sys::stat::Mode};
 use reqwest::StatusCode;
 use std::{
     error::Error as StdError,
@@ -14,9 +13,13 @@ use tokio::fs::File;
 use tokio_util::io::ReaderStream;
 use url::Url;
 
+#[cfg(feature = "nfs")]
+use nix::{fcntl::OFlag, sys::stat::Mode};
+
 #[derive(Debug)]
 pub(crate) enum Error {
     IO(std::io::Error),
+    #[cfg(feature = "nfs")]
     Nfs(nfs::Error),
     Url(url::ParseError),
     Http(reqwest::Error),
@@ -26,6 +29,7 @@ impl Error {
     pub(crate) fn is_not_found(&self) -> bool {
         match self {
             Error::IO(x) if x.kind() == ErrorKind::NotFound => true,
+            #[cfg(feature = "nfs")]
             Error::Nfs(x) if x.into_io().kind() == ErrorKind::NotFound => true,
             Error::Http(x) if x.status().map_or(false, |v| v == StatusCode::NOT_FOUND) => true,
             _ => false,
@@ -51,6 +55,7 @@ impl From<Error> for std::io::Error {
     fn from(err: Error) -> Self {
         match err {
             Error::IO(x) => x,
+            #[cfg(feature = "nfs")]
             Error::Nfs(x) => x.into_io(),
             Error::Url(x) => std::io::Error::new(ErrorKind::Other, x),
             Error::Http(x) => std::io::Error::new(ErrorKind::Other, x),
@@ -58,6 +63,7 @@ impl From<Error> for std::io::Error {
     }
 }
 
+#[cfg(feature = "nfs")]
 impl From<nfs::Error> for Error {
     fn from(err: nfs::Error) -> Self {
         Error::Nfs(err)
@@ -87,16 +93,16 @@ pub(crate) trait Library {
 }
 
 pub(crate) async fn get_library(path: &str) -> Result<Box<dyn Library + Send + Sync>> {
-    let lib: Box<dyn Library + Send + Sync> =
-        if path.starts_with("http://") || path.starts_with("https://") {
-            Box::new(HTTPLibrary::new(Url::parse(path)?))
-        } else if path.starts_with("nfs://") {
-            Box::new(NFSLibrary::new(Url::parse(path)?).await?)
-        } else {
-            Box::new(FSLibrary::new(Path::new(path))?)
-        };
+    #[cfg(feature = "nfs")]
+    if path.starts_with("nfs://") {
+        return Ok(Box::new(NFSLibrary::new(Url::parse(path)?).await?));
+    }
 
-    Ok(lib)
+    if path.starts_with("http://") || path.starts_with("https://") {
+        Ok(Box::new(HTTPLibrary::new(Url::parse(path)?)))
+    } else {
+        Ok(Box::new(FSLibrary::new(Path::new(path))?))
+    }
 }
 
 struct FSLibrary {
@@ -150,11 +156,13 @@ impl Library for HTTPLibrary {
     }
 }
 
+#[cfg(feature = "nfs")]
 struct NFSLibrary {
     client: nfs::Client,
 }
 
 // NFSLibrary implements Library on top of an NFS share.
+#[cfg(feature = "nfs")]
 impl NFSLibrary {
     async fn new(base: Url) -> Result<Self> {
         Ok(NFSLibrary {
@@ -164,6 +172,7 @@ impl NFSLibrary {
 }
 
 #[async_trait]
+#[cfg(feature = "nfs")]
 impl Library for NFSLibrary {
     async fn get_song(
         &self,

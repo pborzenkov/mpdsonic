@@ -9,6 +9,9 @@
   - Supports MPD libraries over local FS, HTTP(S) and NFS
 
 `mpdsonic` has been tested to work with [DSub][dsub] in "Browse by Tags" mode.
+
+By default, `nfs` support is not compiled. Enable `nfs` feature to compile it
+(requires `libnfs` library to be installed).
   
 ## Example
 
