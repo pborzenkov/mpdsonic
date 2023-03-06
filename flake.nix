@@ -20,58 +20,69 @@
     };
   };
 
-  outputs = { self, ... } @ inputs: inputs.flake-utils.lib.eachDefaultSystem (system:
-    let
-      pkgs = import inputs.nixpkgs { inherit system; overlays = [ (import inputs.rust-overlay) ]; };
+  outputs = {self, ...} @ inputs:
+    inputs.flake-utils.lib.eachDefaultSystem (system: let
+      pkgs = import inputs.nixpkgs {
+        inherit system;
+        overlays = [(import inputs.rust-overlay)];
+      };
       rust = pkgs.rust-bin.stable.latest;
 
       craneLib = (inputs.crane.mkLib pkgs).overrideToolchain rust.default;
 
       commonArgs = {
         src = ./.;
-        nativeBuildInputs = [ pkgs.pkgconfig pkgs.rustPlatform.bindgenHook ];
-        buildInputs = [ pkgs.openssl pkgs.libnfs ];
+        nativeBuildInputs = [pkgs.pkgconfig pkgs.rustPlatform.bindgenHook];
+        buildInputs = [pkgs.openssl pkgs.libnfs];
       };
 
-      cargoArtifacts = craneLib.buildDepsOnly (commonArgs // {
-        installCargoArtifactsMode = "use-zstd";
-      });
+      cargoArtifacts = craneLib.buildDepsOnly (commonArgs
+        // {
+          installCargoArtifactsMode = "use-zstd";
+          cargoExtraArgs = "--features nfs";
+        });
 
-      fmt = craneLib.cargoFmt (commonArgs // { });
+      fmt = craneLib.cargoFmt (commonArgs // {});
 
-      clippy = craneLib.cargoClippy (commonArgs // {
-        inherit cargoArtifacts fmt;
+      clippy = craneLib.cargoClippy (commonArgs
+        // {
+          inherit cargoArtifacts fmt;
 
-        installCargoArtifactsMode = "use-zstd";
-        cargoClippyExtraArgs = "-- --deny warnings";
-      });
+          installCargoArtifactsMode = "use-zstd";
+          cargoClippyExtraArgs = "-- --deny warnings";
+          cargoExtraArgs = "--features nfs";
+        });
 
-      test = craneLib.cargoNextest (commonArgs // {
-        cargoArtifacts = clippy;
+      test = craneLib.cargoNextest (commonArgs
+        // {
+          cargoArtifacts = clippy;
 
-        installCargoArtifactsMode = "use-zstd";
-      });
+          installCargoArtifactsMode = "use-zstd";
+          cargoExtraArgs = "--features nfs";
+        });
 
-      mpdsonic = craneLib.buildPackage (commonArgs // {
-        cargoArtifacts = test;
+      mpdsonic = craneLib.buildPackage (commonArgs
+        // {
+          cargoArtifacts = test;
 
-        doCheck = false;
-      });
-    in
-    {
+          doCheck = false;
+          cargoExtraArgs = "--features nfs";
+        });
+    in {
       checks = {
         inherit mpdsonic;
       };
 
       packages.default = mpdsonic;
 
-      apps.default = inputs.flake-utils.lib.mkApp
+      apps.default =
+        inputs.flake-utils.lib.mkApp
         {
           drv = pkgs.symlinkJoin {
             name = "mpdsonic";
-            paths = [ mpdsonic ];
+            paths = [mpdsonic];
 
-            buildInputs = [ pkgs.makeWrapper ];
+            buildInputs = [pkgs.makeWrapper];
 
             postBuild = ''
               wrapProgram $out/bin/mpdsonic \
@@ -81,12 +92,12 @@
         };
 
       devShells.default = pkgs.mkShell {
-        inputsFrom = [ mpdsonic ];
+        inputsFrom = [mpdsonic];
 
         nativeBuildInputs = [
           (rust.default.override
             {
-              extensions = [ "rust-src" ];
+              extensions = ["rust-src"];
             })
           pkgs.ffmpeg
         ];
