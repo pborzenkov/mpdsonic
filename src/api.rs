@@ -25,6 +25,7 @@ mod error;
 mod glue;
 mod playlists;
 mod retrieval;
+mod scanning;
 mod system;
 mod types;
 mod users;
@@ -73,6 +74,7 @@ pub(crate) fn get_router(
                 .merge(browsing::get_router())
                 .merge(playlists::get_router())
                 .merge(retrieval::get_router())
+                .merge(scanning::get_router())
                 .merge(system::get_router())
                 .merge(users::get_router()),
         )

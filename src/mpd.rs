@@ -1,7 +1,8 @@
 use axum::async_trait;
 use mpd_client::{
     client::{CommandError, ConnectWithPasswordError},
-    commands, Client,
+    commands::{Ping, SetBinaryLimit},
+    Client,
 };
 use std::net::SocketAddr;
 use tokio::net::TcpStream;
@@ -56,7 +57,7 @@ impl bb8::ManageConnection for ConnectionManager {
     }
 
     async fn is_valid(&self, conn: &mut Self::Connection) -> Result<(), Self::Error> {
-        conn.command(commands::Ping).await.map_err(Error::Command)
+        conn.command(Ping).await.map_err(Error::Command)
     }
 
     fn has_broken(&self, conn: &mut Self::Connection) -> bool {
@@ -70,8 +71,42 @@ pub struct ConnectionCustomizer;
 #[async_trait]
 impl bb8::CustomizeConnection<Client, Error> for ConnectionCustomizer {
     async fn on_acquire(&self, conn: &mut Client) -> Result<(), Error> {
-        conn.command(commands::SetBinaryLimit(128 * 1024))
+        conn.command(SetBinaryLimit(128 * 1024))
             .await
             .map_err(Error::Command)
+    }
+}
+
+pub(crate) mod commands {
+    use mpd_client::{
+        commands::Command,
+        protocol::{command::Command as RawCommand, response::Frame},
+        responses::TypedResponseError,
+    };
+
+    pub(crate) struct Update<'a>(Option<&'a str>);
+
+    impl<'a> Update<'a> {
+        pub(crate) fn new() -> Self {
+            Update(None)
+        }
+    }
+
+    impl<'a> Command for Update<'a> {
+        type Response = u64;
+
+        fn command(&self) -> RawCommand {
+            RawCommand::new("update")
+        }
+
+        fn response(self, mut frame: Frame) -> Result<Self::Response, TypedResponseError> {
+            let value = frame
+                .get("updating_db")
+                .ok_or_else(|| TypedResponseError::missing("updating_db"))?;
+
+            value
+                .parse()
+                .map_err(|e| TypedResponseError::invalid_value("updating_db", value).source(e))
+        }
     }
 }

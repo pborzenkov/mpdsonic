@@ -311,10 +311,9 @@ async fn delete_playlist(
 
 #[cfg(test)]
 mod tests {
-    use super::{GetPlaylists, Playlist};
+    use super::{GetPlaylist, GetPlaylists, Playlist};
     use crate::api::{
         expect_ok_json, expect_ok_xml, json,
-        playlists::GetPlaylist,
         types::{AlbumID, ArtistID, CoverArtID, PlaylistID, Song, SongID},
         xml,
     };

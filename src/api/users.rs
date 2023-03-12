@@ -21,7 +21,7 @@ async fn get_user(
         true => Ok(GetUser {
             username: params.username,
             scrobbling_enabled: state.listenbrainz.is_some(),
-            admin_role: false,
+            admin_role: true,
             settings_role: false,
             download_role: true,
             upload_role: false,
