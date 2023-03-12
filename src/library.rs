@@ -21,6 +21,8 @@ pub(crate) enum Error {
     IO(std::io::Error),
     #[cfg(feature = "nfs")]
     Nfs(nfs::Error),
+    #[cfg(not(feature = "nfs"))]
+    NfsUnsupported,
     Url(url::ParseError),
     Http(reqwest::Error),
 }
@@ -39,7 +41,11 @@ impl Error {
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{self:?}")
+        match self {
+            #[cfg(not(feature = "nfs"))]
+            Error::NfsUnsupported => write!(f, "NFS library backend is not supported"),
+            _ => write!(f, "{self:?}"),
+        }
     }
 }
 
@@ -54,6 +60,10 @@ impl From<std::io::Error> for Error {
 impl From<Error> for std::io::Error {
     fn from(err: Error) -> Self {
         match err {
+            #[cfg(not(feature = "nfs"))]
+            Error::NfsUnsupported => {
+                std::io::Error::new(ErrorKind::Other, "NFS library backend is not supported")
+            }
             Error::IO(x) => x,
             #[cfg(feature = "nfs")]
             Error::Nfs(x) => x.into_io(),
@@ -93,9 +103,12 @@ pub(crate) trait Library {
 }
 
 pub(crate) async fn get_library(path: &str) -> Result<Box<dyn Library + Send + Sync>> {
-    #[cfg(feature = "nfs")]
     if path.starts_with("nfs://") {
+        #[cfg(feature = "nfs")]
         return Ok(Box::new(NFSLibrary::new(Url::parse(path)?).await?));
+
+        #[cfg(not(feature = "nfs"))]
+        return Err(Error::NfsUnsupported);
     }
 
     if path.starts_with("http://") || path.starts_with("https://") {

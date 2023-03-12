@@ -56,6 +56,13 @@ async fn print_request(req: Request<Body>, next: Next<Body>) -> Response {
 async fn main() {
     tracing_subscriber::fmt::init();
 
+    if let Err(err) = run_main().await {
+        eprintln!("ERROR: {}", err);
+        std::process::exit(-1);
+    }
+}
+
+async fn run_main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
     let manager = mpd::ConnectionManager::new(&args.mpd_address, &args.mpd_password);
@@ -64,14 +71,13 @@ async fn main() {
         .connection_timeout(Duration::from_secs(1))
         .connection_customizer(Box::new(mpd::ConnectionCustomizer))
         .build(manager)
-        .await
-        .unwrap();
+        .await?;
 
     let auth = api::Authentication::new(&args.username, &args.password);
     let app = api::get_router(
         auth,
         pool,
-        library::get_library(&args.mpd_library).await.unwrap(),
+        library::get_library(&args.mpd_library).await?,
         args.listenbrainz_token
             .and_then(|t| listenbrainz::Client::new(&t).ok()),
     )
@@ -79,6 +85,7 @@ async fn main() {
 
     axum::Server::bind(&args.address)
         .serve(app.into_make_service())
-        .await
-        .unwrap();
+        .await?;
+
+    Ok(())
 }
