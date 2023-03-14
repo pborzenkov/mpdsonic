@@ -77,36 +77,4 @@ impl bb8::CustomizeConnection<Client, Error> for ConnectionCustomizer {
     }
 }
 
-pub(crate) mod commands {
-    use mpd_client::{
-        commands::Command,
-        protocol::{command::Command as RawCommand, response::Frame},
-        responses::TypedResponseError,
-    };
-
-    pub(crate) struct Update<'a>(Option<&'a str>);
-
-    impl<'a> Update<'a> {
-        pub(crate) fn new() -> Self {
-            Update(None)
-        }
-    }
-
-    impl<'a> Command for Update<'a> {
-        type Response = u64;
-
-        fn command(&self) -> RawCommand {
-            RawCommand::new("update")
-        }
-
-        fn response(self, mut frame: Frame) -> Result<Self::Response, TypedResponseError> {
-            let value = frame
-                .get("updating_db")
-                .ok_or_else(|| TypedResponseError::missing("updating_db"))?;
-
-            value
-                .parse()
-                .map_err(|e| TypedResponseError::invalid_value("updating_db", value).source(e))
-        }
-    }
-}
+pub(crate) mod commands {}

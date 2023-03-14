@@ -923,9 +923,9 @@ dependencies = [
 
 [[package]]
 name = "mpd_client"
-version = "1.0.0"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab5ddb4e7f7f0323823dcadfb17cb8b4d25d7ebcfee20779a814091d5b6dec95"
+checksum = "09acf3ba374ec87b03c0ca60f648dc3f7d045d4b8a4254553217f9098fef9039"
 dependencies = [
  "bytes",
  "chrono",
