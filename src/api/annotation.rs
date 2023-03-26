@@ -1,6 +1,6 @@
 use super::{types::SongID, Error};
 use axum::{extract::Query, routing::Router, Extension};
-use chrono::Utc;
+use time::OffsetDateTime;
 use mpd_client::{commands::Find, filter::Filter, tag::Tag};
 use serde::Deserialize;
 use std::sync::Arc;
@@ -41,7 +41,7 @@ async fn scrobble(
     match param.submission {
         Some(true) => {
             listenbrainz
-                .listen(song, param.time.unwrap_or_else(|| Utc::now().timestamp()))
+                .listen(song, param.time.unwrap_or_else(|| OffsetDateTime::now_utc().unix_timestamp()))
                 .await?
         }
         _ => listenbrainz.playing_now(song).await?,

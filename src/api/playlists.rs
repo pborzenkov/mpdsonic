@@ -73,7 +73,7 @@ async fn get_playlists(
                     .iter()
                     .map(|s| s.duration.map(|v| v.as_secs()).unwrap_or(0))
                     .sum(),
-                changed: p.last_modified.chrono_datetime().to_rfc3339(),
+                changed: p.last_modified.raw().to_owned(),
             })
             .collect(),
     })
@@ -146,7 +146,7 @@ async fn get_playlist(
         changed: playlists
             .iter()
             .find(|&p| p.name == params.playlist.name)
-            .map(|p| p.last_modified.chrono_datetime().to_rfc3339()),
+            .map(|p| p.last_modified.raw().to_owned()),
         songs: songs.into_iter().map(mpd_song_to_subsonic).collect(),
     })
 }

@@ -1,5 +1,4 @@
 use super::types::{AlbumID, ArtistID, CoverArtID, Song, SongID};
-use chrono::format::{parse, strftime::StrftimeItems, Parsed};
 use mpd_client::{responses, tag::Tag};
 use std::{collections::HashMap, str::FromStr};
 
@@ -32,15 +31,10 @@ where
         .and_then(|v| v.first().and_then(|v| v.parse().ok()))
 }
 
-static FORMATS: &[&str] = &["%Y-%m-%d", "%Y-%m", "%Y"];
-
 pub(crate) fn get_song_year(song: &responses::Song) -> Option<i32> {
-    let date = get_single_tag::<String>(&song.tags, &Tag::OriginalDate)?;
-
-    FORMATS.iter().find_map(|f| {
-        let mut parsed = Parsed::new();
-        parse(&mut parsed, &date, StrftimeItems::new(f)).ok()?;
-
-        parsed.year
-    })
+    dbg!(get_single_tag::<String>(&song.tags, &Tag::OriginalDate));
+    dbg!(get_single_tag::<String>(&song.tags, &Tag::OriginalDate)?
+        .split('-')
+        .next()
+        .and_then(|y| y.parse().ok()))
 }
