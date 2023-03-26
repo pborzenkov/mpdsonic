@@ -1,9 +1,9 @@
 use super::{types::SongID, Error};
 use axum::{extract::Query, routing::Router, Extension};
-use time::OffsetDateTime;
 use mpd_client::{commands::Find, filter::Filter, tag::Tag};
 use serde::Deserialize;
 use std::sync::Arc;
+use time::OffsetDateTime;
 
 pub(crate) fn get_router() -> Router {
     Router::new().route("/scrobble.view", super::handler(scrobble))
@@ -41,7 +41,12 @@ async fn scrobble(
     match param.submission {
         Some(true) => {
             listenbrainz
-                .listen(song, param.time.unwrap_or_else(|| OffsetDateTime::now_utc().unix_timestamp()))
+                .listen(
+                    song,
+                    param
+                        .time
+                        .unwrap_or_else(|| OffsetDateTime::now_utc().unix_timestamp()),
+                )
                 .await?
         }
         _ => listenbrainz.playing_now(song).await?,
