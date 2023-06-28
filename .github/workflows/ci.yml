@@ -38,4 +38,4 @@ jobs:
       - name: Check
         run: devenv shell cargo check
       - name: Test
-        run: devenv shell cargo nextest
+        run: devenv shell cargo nextest run
