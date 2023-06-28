@@ -13,16 +13,9 @@ use tokio::fs::File;
 use tokio_util::io::ReaderStream;
 use url::Url;
 
-#[cfg(feature = "nfs")]
-use nix::{fcntl::OFlag, sys::stat::Mode};
-
 #[derive(Debug)]
 pub(crate) enum Error {
     IO(std::io::Error),
-    #[cfg(feature = "nfs")]
-    Nfs(nfs::Error),
-    #[cfg(not(feature = "nfs"))]
-    NfsUnsupported,
     Url(url::ParseError),
     Http(reqwest::Error),
 }
@@ -31,8 +24,6 @@ impl Error {
     pub(crate) fn is_not_found(&self) -> bool {
         match self {
             Error::IO(x) if x.kind() == ErrorKind::NotFound => true,
-            #[cfg(feature = "nfs")]
-            Error::Nfs(x) if x.into_io().kind() == ErrorKind::NotFound => true,
             Error::Http(x) if x.status().map_or(false, |v| v == StatusCode::NOT_FOUND) => true,
             _ => false,
         }
@@ -41,11 +32,7 @@ impl Error {
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            #[cfg(not(feature = "nfs"))]
-            Error::NfsUnsupported => write!(f, "NFS library backend is not supported"),
-            _ => write!(f, "{self:?}"),
-        }
+        write!(f, "{self:?}")
     }
 }
 
@@ -60,23 +47,10 @@ impl From<std::io::Error> for Error {
 impl From<Error> for std::io::Error {
     fn from(err: Error) -> Self {
         match err {
-            #[cfg(not(feature = "nfs"))]
-            Error::NfsUnsupported => {
-                std::io::Error::new(ErrorKind::Other, "NFS library backend is not supported")
-            }
             Error::IO(x) => x,
-            #[cfg(feature = "nfs")]
-            Error::Nfs(x) => x.into_io(),
             Error::Url(x) => std::io::Error::new(ErrorKind::Other, x),
             Error::Http(x) => std::io::Error::new(ErrorKind::Other, x),
         }
-    }
-}
-
-#[cfg(feature = "nfs")]
-impl From<nfs::Error> for Error {
-    fn from(err: nfs::Error) -> Self {
-        Error::Nfs(err)
     }
 }
 
@@ -103,14 +77,6 @@ pub(crate) trait Library {
 }
 
 pub(crate) async fn get_library(path: &str) -> Result<Box<dyn Library + Send + Sync>> {
-    if path.starts_with("nfs://") {
-        #[cfg(feature = "nfs")]
-        return Ok(Box::new(NFSLibrary::new(Url::parse(path)?).await?));
-
-        #[cfg(not(feature = "nfs"))]
-        return Err(Error::NfsUnsupported);
-    }
-
     if path.starts_with("http://") || path.starts_with("https://") {
         Ok(Box::new(HTTPLibrary::new(Url::parse(path)?)))
     } else {
@@ -166,43 +132,5 @@ impl Library for HTTPLibrary {
         let stream = reqwest::get(self.base.join(uri)?).await?.bytes_stream();
 
         Ok(stream.map(|x| x.map_err(Into::into)).boxed())
-    }
-}
-
-#[cfg(feature = "nfs")]
-struct NFSLibrary {
-    client: nfs::Client,
-}
-
-// NFSLibrary implements Library on top of an NFS share.
-#[cfg(feature = "nfs")]
-impl NFSLibrary {
-    async fn new(base: Url) -> Result<Self> {
-        Ok(NFSLibrary {
-            client: nfs::Client::mount(base).await?,
-        })
-    }
-}
-
-#[async_trait]
-#[cfg(feature = "nfs")]
-impl Library for NFSLibrary {
-    async fn get_song(
-        &self,
-        uri: &str,
-    ) -> Result<Pin<Box<dyn Stream<Item = Result<Bytes>> + Send + 'static>>> {
-        let uri = uri.to_string();
-        let file = self
-            .client
-            .open(
-                Path::new(&uri),
-                OFlag::O_RDONLY,
-                Mode::from_bits_truncate(0o644),
-            )
-            .await?;
-
-        Ok(ReaderStream::new(file)
-            .map(|x| x.map_err(Into::into))
-            .boxed())
     }
 }
