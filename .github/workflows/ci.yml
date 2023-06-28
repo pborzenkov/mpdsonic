@@ -17,7 +17,7 @@ jobs:
         with:
           name: devenv
       - name: Install devenv.sh
-        run: nix profile install github:cachix/devenv/latest
+        run: nix profile install --accept-flake-config github:cachix/devenv/latest
       - name: Setup nix cache
         uses: DeterminateSystems/magic-nix-cache-action@v1
       - name: Setup cargo cache
