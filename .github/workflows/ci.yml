@@ -31,11 +31,8 @@ jobs:
             target/ 
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
-      - name: Lint
+      - name: Run pre-commit hooks
         run: |
-          devenv shell cargo fmt
-          devenv shell cargo clippy -- -D warnings
-      - name: Check
-        run: devenv shell cargo check
+          devenv shell pre-commit run --all-files
       - name: Test
         run: devenv shell cargo nextest run
