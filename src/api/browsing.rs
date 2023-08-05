@@ -1,5 +1,5 @@
 use super::{
-    common::{get_song_year, mpd_song_to_subsonic},
+    common::{get_song_year, get_songs_ratings, mpd_song_to_subsonic},
     types::{AlbumID, ArtistID, CoverArtID, Song},
     Error,
 };
@@ -298,35 +298,39 @@ async fn get_album(
 ) -> super::Result<GetAlbum> {
     let conn = state.pool.get().await?;
 
-    let reply_songs = conn
-        .command(Find::new(
-            Filter::tag(Tag::AlbumArtist, &param.album.artist)
-                .and(Filter::tag(Tag::Album, &param.album.name)),
+    let (songs, count) = conn
+        .command_list((
+            Find::new(
+                Filter::tag(Tag::AlbumArtist, &param.album.artist)
+                    .and(Filter::tag(Tag::Album, &param.album.name)),
+            ),
+            Count::new(
+                Filter::tag(Tag::AlbumArtist, &param.album.artist)
+                    .and(Filter::tag(Tag::Album, &param.album.name)),
+            ),
         ))
         .await?;
-    let reply_count = conn
-        .command(Count::new(
-            Filter::tag(Tag::AlbumArtist, &param.album.artist)
-                .and(Filter::tag(Tag::Album, &param.album.name)),
-        ))
-        .await?;
+    let ratings = get_songs_ratings(&conn, &songs).await?;
 
     Ok(GetAlbum {
         id: param.album.clone(),
         name: param.album.name.clone(),
         artist: param.album.artist.clone(),
         artist_id: ArtistID::new(&param.album.artist),
-        year: reply_songs.first().and_then(get_song_year),
-        genre: reply_songs
+        year: songs.first().and_then(get_song_year),
+        genre: songs
             .first()
             .and_then(|s| s.tags.get(&Tag::Genre).map(|v| v.join(", "))),
-        cover_art: reply_songs
+        cover_art: songs
             .first()
             .map(|s| CoverArtID::new(&s.file_path().display().to_string()))
             .unwrap_or_default(),
-        songs: reply_songs.into_iter().map(mpd_song_to_subsonic).collect(),
-        song_count: reply_count.songs,
-        duration: reply_count.playtime.as_secs(),
+        songs: songs
+            .into_iter()
+            .map(|s| mpd_song_to_subsonic(s, &ratings))
+            .collect(),
+        song_count: count.songs,
+        duration: count.playtime.as_secs(),
     })
 }
 
@@ -611,6 +615,7 @@ mod tests {
                     path: "path1".to_string(),
                     album_id: Some(AlbumID::new("alpha", "beta")),
                     artist_id: ArtistID::new("alpha"),
+                    user_rating: Some(3),
                 },
                 Song {
                     id: SongID::new("song2"),
@@ -628,7 +633,7 @@ mod tests {
             xml(&get_album),
             expect_ok_xml(Some(
                 r#"<album id="eyJuYW1lIjoiYWxwaGEiLCJhcnRpc3QiOiJiZXRhIn0=" name="beta" artist="alpha" artistId="eyJuYW1lIjoiYWxwaGEifQ==" songCount="2" duration="300" year="2020" genre="rock" coverArt="eyJwYXRoIjoiYXJ0d29yayJ9">
-    <song id="eyJwYXRoIjoic29uZzEifQ==" title="song1" album="beta" artist="alpha" track="1" discNumber="1" year="2020" genre="rock" coverArt="eyJwYXRoIjoiYXJ0d29yayJ9" duration="300" path="path1" albumId="eyJuYW1lIjoiYWxwaGEiLCJhcnRpc3QiOiJiZXRhIn0=" artistId="eyJuYW1lIjoiYWxwaGEifQ==" />
+    <song id="eyJwYXRoIjoic29uZzEifQ==" title="song1" album="beta" artist="alpha" track="1" discNumber="1" year="2020" genre="rock" coverArt="eyJwYXRoIjoiYXJ0d29yayJ9" duration="300" path="path1" albumId="eyJuYW1lIjoiYWxwaGEiLCJhcnRpc3QiOiJiZXRhIn0=" artistId="eyJuYW1lIjoiYWxwaGEifQ==" userRating="3" />
     <song id="eyJwYXRoIjoic29uZzIifQ==" album="beta" artist="alpha" coverArt="eyJwYXRoIjoiYXJ0d29yayJ9" path="path2" albumId="eyJuYW1lIjoiYWxwaGEiLCJhcnRpc3QiOiJiZXRhIn0=" artistId="eyJuYW1lIjoiYWxwaGEifQ==" />
   </album>"#
             ),)
@@ -661,6 +666,7 @@ mod tests {
                         "path": "path1",
                         "albumId": "eyJuYW1lIjoiYWxwaGEiLCJhcnRpc3QiOiJiZXRhIn0=",
                         "artistId": "eyJuYW1lIjoiYWxwaGEifQ==",
+                        "userRating": 3,
                     },
                     {
                         "id": "eyJwYXRoIjoic29uZzIifQ==",

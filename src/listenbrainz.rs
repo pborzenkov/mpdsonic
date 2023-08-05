@@ -65,6 +65,21 @@ impl Client {
         .await
     }
 
+    pub(crate) async fn feedback(&self, song: &Song, score: Score) -> Result<()> {
+        let feedback = Feedback {
+            recording_mbid: single_value(&song.tags, Tag::MusicBrainzRecordingId),
+            score,
+        };
+
+        self.client
+            .post("https://api.listenbrainz.org/1/feedback/recording-feedback")
+            .json(&feedback)
+            .send()
+            .await?;
+
+        Ok(())
+    }
+
     async fn submit(&self, submission: Submission) -> Result<()> {
         self.client
             .post("https://api.listenbrainz.org/1/submit-listens")
@@ -159,4 +174,30 @@ struct AdditionalInfo {
     media_player: &'static str,
     submission_client: &'static str,
     submission_client_version: &'static str,
+}
+
+#[derive(Debug, Serialize)]
+struct Feedback {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    recording_mbid: Option<String>,
+    #[serde(serialize_with = "serialize_score")]
+    score: Score,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) enum Score {
+    Love,
+    Hate,
+    Remove,
+}
+
+fn serialize_score<S>(score: &Score, s: S) -> std::result::Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    s.serialize_i32(match score {
+        Score::Love => 1,
+        Score::Hate => -1,
+        Score::Remove => 0,
+    })
 }

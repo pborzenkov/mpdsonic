@@ -76,5 +76,3 @@ impl bb8::CustomizeConnection<Client, Error> for ConnectionCustomizer {
             .map_err(Error::Command)
     }
 }
-
-pub(crate) mod commands {}

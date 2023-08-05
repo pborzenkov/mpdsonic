@@ -1,8 +1,16 @@
-use super::types::{AlbumID, ArtistID, CoverArtID, Song, SongID};
-use mpd_client::{responses, tag::Tag};
-use std::{collections::HashMap, str::FromStr};
+use super::{
+    types::{AlbumID, ArtistID, CoverArtID, Song, SongID},
+    Result,
+};
+use mpd_client::{commands::StickerFind, responses, tag::Tag, Client};
+use std::{
+    collections::{HashMap, HashSet},
+    str::FromStr,
+};
 
-pub(crate) fn mpd_song_to_subsonic(song: responses::Song) -> Song {
+pub(crate) const STICKER_RATING: &str = "rating";
+
+pub(crate) fn mpd_song_to_subsonic(song: responses::Song, ratings: &HashMap<String, u8>) -> Song {
     let artists = song.artists().join(", ");
     let path = song.file_path().display().to_string();
 
@@ -20,7 +28,38 @@ pub(crate) fn mpd_song_to_subsonic(song: responses::Song) -> Song {
         path: path.clone(),
         album_id: song.album().map(|album| AlbumID::new(album, &artists)),
         artist_id: ArtistID::new(&artists),
+        user_rating: ratings.get(&song.url).cloned(),
     }
+}
+
+pub(crate) async fn get_songs_ratings(
+    client: &Client,
+    songs: &[responses::Song],
+) -> Result<HashMap<String, u8>> {
+    let dirs = songs
+        .iter()
+        .filter_map(|s| s.file_path().parent())
+        .collect::<HashSet<_>>();
+    let dirs = dirs
+        .into_iter()
+        .map(|d| d.to_string_lossy())
+        .collect::<Vec<_>>();
+
+    let ratings = client
+        .command_list(
+            dirs.iter()
+                .map(|s| StickerFind::new(s, STICKER_RATING))
+                .collect::<Vec<_>>(),
+        )
+        .await?;
+
+    Ok(ratings.into_iter().fold(HashMap::new(), |mut acc, mut r| {
+        acc.extend(r.value.drain().filter_map(|(k, v)| {
+            let v = v.parse::<u8>().ok()?;
+            Some((k, v))
+        }));
+        acc
+    }))
 }
 
 pub(crate) fn get_single_tag<T>(tags: &HashMap<Tag, Vec<String>>, tag: &Tag) -> Option<T>
@@ -32,9 +71,8 @@ where
 }
 
 pub(crate) fn get_song_year(song: &responses::Song) -> Option<i32> {
-    dbg!(get_single_tag::<String>(&song.tags, &Tag::OriginalDate));
-    dbg!(get_single_tag::<String>(&song.tags, &Tag::OriginalDate)?
+    get_single_tag::<String>(&song.tags, &Tag::OriginalDate)?
         .split('-')
         .next()
-        .and_then(|y| y.parse().ok()))
+        .and_then(|y| y.parse().ok())
 }

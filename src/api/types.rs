@@ -278,4 +278,7 @@ pub(crate) struct Song {
     pub(crate) album_id: Option<AlbumID>,
     #[yaserde(attribute, rename = "artistId")]
     pub(crate) artist_id: ArtistID,
+    #[yaserde(attribute, rename = "userRating")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) user_rating: Option<u8>,
 }
