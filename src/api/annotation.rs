@@ -1,6 +1,10 @@
 use crate::listenbrainz;
 
-use super::{common::STICKER_RATING, types::SongID, Error};
+use super::{
+    common::{STICKER_RATING, STICKER_STARRED},
+    types::SongID,
+    Error,
+};
 use axum::{extract::Query, routing::Router, Extension};
 use mpd_client::{
     commands::{Find, StickerDelete, StickerSet},
@@ -9,12 +13,14 @@ use mpd_client::{
 };
 use serde::Deserialize;
 use std::sync::Arc;
-use time::OffsetDateTime;
+use time::{format_description::well_known, OffsetDateTime};
 
 pub(crate) fn get_router() -> Router {
     Router::new()
         .route("/scrobble.view", super::handler(scrobble))
         .route("/setRating.view", super::handler(set_rating))
+        .route("/star.view", super::handler(star))
+        .route("/unstar.view", super::handler(unstar))
 }
 
 #[derive(Clone, Deserialize)]
@@ -75,16 +81,16 @@ async fn set_rating(
     Extension(state): Extension<Arc<super::State>>,
     Query(param): Query<SetRatingQuery>,
 ) -> super::Result<()> {
-    let pool = state.pool.get().await?;
+    let conn = state.pool.get().await?;
     if param.rating > 0 {
-        pool.command(StickerSet::new(
+        conn.command(StickerSet::new(
             &param.song.path,
             STICKER_RATING,
             &param.rating.to_string(),
         ))
         .await?;
     } else {
-        pool.command(StickerDelete::new(&param.song.path, "rating"))
+        conn.command(StickerDelete::new(&param.song.path, "rating"))
             .await?;
     };
 
@@ -94,7 +100,7 @@ async fn set_rating(
         return Ok(());
     };
 
-    let songs = pool
+    let songs = conn
         .command(Find::new(Filter::tag(
             Tag::Other("file".into()),
             &param.song.path,
@@ -110,6 +116,54 @@ async fn set_rating(
     } {
         listenbrainz.feedback(song, score).await?;
     }
+
+    Ok(())
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StarQuery {
+    #[serde(rename = "id")]
+    song: SongID,
+}
+
+async fn star(
+    Extension(state): Extension<Arc<super::State>>,
+    Query(param): Query<StarQuery>,
+) -> super::Result<()> {
+    state
+        .pool
+        .get()
+        .await?
+        .command(StickerSet::new(
+            &param.song.path,
+            STICKER_STARRED,
+            &OffsetDateTime::now_utc()
+                .format(&well_known::Rfc3339)
+                .map_err(|_| super::Error::generic_error(None))?,
+        ))
+        .await?;
+
+    Ok(())
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UnstarQuery {
+    #[serde(rename = "id")]
+    song: SongID,
+}
+
+async fn unstar(
+    Extension(state): Extension<Arc<super::State>>,
+    Query(param): Query<UnstarQuery>,
+) -> super::Result<()> {
+    state
+        .pool
+        .get()
+        .await?
+        .command(StickerDelete::new(&param.song.path, STICKER_STARRED))
+        .await?;
 
     Ok(())
 }

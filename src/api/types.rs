@@ -281,4 +281,7 @@ pub(crate) struct Song {
     #[yaserde(attribute, rename = "userRating")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) user_rating: Option<u8>,
+    #[yaserde(attribute)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) starred: Option<String>,
 }

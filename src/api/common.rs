@@ -9,8 +9,13 @@ use std::{
 };
 
 pub(crate) const STICKER_RATING: &str = "rating";
+pub(crate) const STICKER_STARRED: &str = "starred";
 
-pub(crate) fn mpd_song_to_subsonic(song: responses::Song, ratings: &HashMap<String, u8>) -> Song {
+pub(crate) fn mpd_song_to_subsonic(
+    song: responses::Song,
+    ratings: &HashMap<String, u8>,
+    starred: &HashMap<String, String>,
+) -> Song {
     let artists = song.artists().join(", ");
     let path = song.file_path().display().to_string();
 
@@ -29,13 +34,18 @@ pub(crate) fn mpd_song_to_subsonic(song: responses::Song, ratings: &HashMap<Stri
         album_id: song.album().map(|album| AlbumID::new(album, &artists)),
         artist_id: ArtistID::new(&artists),
         user_rating: ratings.get(&song.url).cloned(),
+        starred: starred.get(&song.url).cloned(),
     }
 }
 
-pub(crate) async fn get_songs_ratings(
+pub(crate) async fn get_songs_ratings_starred(
     client: &Client,
     songs: &[responses::Song],
-) -> Result<HashMap<String, u8>> {
+) -> Result<(HashMap<String, u8>, HashMap<String, String>)> {
+    if songs.is_empty() {
+        return Ok((HashMap::new(), HashMap::new()));
+    }
+
     let dirs = songs
         .iter()
         .filter_map(|s| s.file_path().parent())
@@ -52,14 +62,27 @@ pub(crate) async fn get_songs_ratings(
                 .collect::<Vec<_>>(),
         )
         .await?;
+    let starred = client
+        .command_list(
+            dirs.iter()
+                .map(|s| StickerFind::new(s, STICKER_STARRED))
+                .collect::<Vec<_>>(),
+        )
+        .await?;
 
-    Ok(ratings.into_iter().fold(HashMap::new(), |mut acc, mut r| {
-        acc.extend(r.value.drain().filter_map(|(k, v)| {
+    let ratings = ratings.into_iter().fold(HashMap::new(), |mut acc, r| {
+        acc.extend(r.value.into_iter().filter_map(|(k, v)| {
             let v = v.parse::<u8>().ok()?;
             Some((k, v))
         }));
         acc
-    }))
+    });
+    let starred = starred.into_iter().fold(HashMap::new(), |mut acc, r| {
+        acc.extend(r.value);
+        acc
+    });
+
+    Ok((ratings, starred))
 }
 
 pub(crate) fn get_single_tag<T>(tags: &HashMap<Tag, Vec<String>>, tag: &Tag) -> Option<T>

@@ -1,5 +1,5 @@
 use super::{
-    common::{get_songs_ratings, mpd_song_to_subsonic},
+    common::{get_songs_ratings_starred, mpd_song_to_subsonic},
     glue::RawQuery,
     types::{PlaylistID, Song, SongID},
 };
@@ -131,7 +131,7 @@ async fn get_playlist(
             commands::GetPlaylist(&params.playlist.name),
         ))
         .await?;
-    let ratings = get_songs_ratings(&conn, &songs).await?;
+    let (ratings, starred) = get_songs_ratings_starred(&conn, &songs).await?;
 
     Ok(GetPlaylist {
         id: params.playlist.clone(),
@@ -149,7 +149,7 @@ async fn get_playlist(
             .map(|p| p.last_modified.raw().to_owned()),
         songs: songs
             .into_iter()
-            .map(|s| mpd_song_to_subsonic(s, &ratings))
+            .map(|s| mpd_song_to_subsonic(s, &ratings, &starred))
             .collect(),
     })
 }
@@ -410,6 +410,7 @@ mod tests {
                     album_id: Some(AlbumID::new("alpha", "beta")),
                     artist_id: ArtistID::new("alpha"),
                     user_rating: Some(3),
+                    starred: Some("2023-08-05T21:56:13Z".into()),
                 },
                 Song {
                     id: SongID::new("song2"),
@@ -427,7 +428,7 @@ mod tests {
             xml(&get_playlist),
             expect_ok_xml(Some(
                 r#"<playlist id="eyJuYW1lIjoibWV0YWwifQ==" name="metal" owner="me" public="true" songCount="10" duration="1234" changed="2022-07-11T10:19:57.652Z">
-    <entry id="eyJwYXRoIjoic29uZzEifQ==" title="song1" album="beta" artist="alpha" track="1" discNumber="1" year="2020" genre="rock" coverArt="eyJwYXRoIjoiYXJ0d29yayJ9" duration="300" path="path1" albumId="eyJuYW1lIjoiYWxwaGEiLCJhcnRpc3QiOiJiZXRhIn0=" artistId="eyJuYW1lIjoiYWxwaGEifQ==" userRating="3" />
+    <entry id="eyJwYXRoIjoic29uZzEifQ==" title="song1" album="beta" artist="alpha" track="1" discNumber="1" year="2020" genre="rock" coverArt="eyJwYXRoIjoiYXJ0d29yayJ9" duration="300" path="path1" albumId="eyJuYW1lIjoiYWxwaGEiLCJhcnRpc3QiOiJiZXRhIn0=" artistId="eyJuYW1lIjoiYWxwaGEifQ==" userRating="3" starred="2023-08-05T21:56:13Z" />
     <entry id="eyJwYXRoIjoic29uZzIifQ==" album="beta" artist="alpha" coverArt="eyJwYXRoIjoiYXJ0d29yayJ9" path="path2" albumId="eyJuYW1lIjoiYWxwaGEiLCJhcnRpc3QiOiJiZXRhIn0=" artistId="eyJuYW1lIjoiYWxwaGEifQ==" />
   </playlist>"#
             ),)
@@ -459,6 +460,7 @@ mod tests {
                         "albumId": "eyJuYW1lIjoiYWxwaGEiLCJhcnRpc3QiOiJiZXRhIn0=",
                         "artistId": "eyJuYW1lIjoiYWxwaGEifQ==",
                         "userRating": 3,
+                        "starred": "2023-08-05T21:56:13Z",
                     },
                     {
                         "id": "eyJwYXRoIjoic29uZzIifQ==",
