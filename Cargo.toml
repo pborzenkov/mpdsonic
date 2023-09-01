@@ -28,7 +28,7 @@ tower-http = { version = "0.4", features = ["cors"] }
 tower-service = "0.3"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-url = "2.3"
+url = "2.4"
 xml-rs = "0.8"
 yaserde = "0.8"
 yaserde_derive = "0.8"
