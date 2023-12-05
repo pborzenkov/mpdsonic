@@ -32,3 +32,6 @@ url = "2.4"
 xml-rs = "0.8"
 yaserde = "0.8"
 yaserde_derive = "0.8"
+
+[lints.rust]
+warnings = "deny"
