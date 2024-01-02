@@ -43,7 +43,7 @@ async fn get_cover_art(
             let songs = state.pool.get().await?.command(GetPlaylist(&name)).await?;
 
             songs
-                .get(0)
+                .first()
                 .map(|s| s.file_path().display().to_string())
                 .ok_or_else(Error::not_found)?
         }
