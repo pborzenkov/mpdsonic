@@ -3,17 +3,13 @@ use crate::listenbrainz;
 use axum::{
     body::Body,
     extract::{Extension, FromRequestParts, Query},
-    http::Request,
+    http::{header, request::Parts, HeaderValue, Request},
     middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::{on_service, MethodFilter, MethodRouter, Router},
 };
 use bb8::Pool;
 use glue::{Handler, RawHandler};
-use http::{
-    header::{self, HeaderValue},
-    request::Parts,
-};
 use serde::{Deserialize, Serialize};
 use std::{convert::Infallible, sync::Arc};
 use tower_http::cors::{Any, CorsLayer};
