@@ -6,13 +6,13 @@ use crate::library;
 use axum::{
     body::StreamBody,
     extract::{Extension, Query},
+    http::{header, HeaderValue},
     response::{IntoResponse, Response},
     routing::Router,
 };
 use bytes::{BufMut, Bytes, BytesMut};
 use futures::Stream;
 use futures::StreamExt;
-use http::header::{self, HeaderValue};
 use mpd_client::commands::{AlbumArt, GetPlaylist};
 use serde::Deserialize;
 use std::{pin::Pin, process::Stdio, sync::Arc};

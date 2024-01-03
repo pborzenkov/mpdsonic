@@ -1,5 +1,5 @@
-use http::header;
 use mpd_client::{responses::Song, tag::Tag};
+use reqwest::header::{self, HeaderMap, HeaderValue};
 use serde::Serialize;
 use std::{collections::HashMap, fmt};
 
@@ -37,10 +37,10 @@ impl From<header::InvalidHeaderValue> for Error {
 
 impl Client {
     pub(crate) fn new(token: &str) -> Result<Client> {
-        let mut headers = header::HeaderMap::new();
+        let mut headers = HeaderMap::new();
         headers.insert(
             header::AUTHORIZATION,
-            header::HeaderValue::from_str(&format!("Token {token}"))?,
+            HeaderValue::from_str(&format!("Token {token}"))?,
         );
 
         Ok(Client {

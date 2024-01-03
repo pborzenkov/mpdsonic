@@ -2,10 +2,10 @@ use axum::{
     async_trait,
     body::Body,
     extract::FromRequestParts,
+    http::{request::Parts, Request},
     response::{IntoResponse, Response},
 };
 use futures::future::Map;
-use http::request::Parts;
 use serde::Serialize;
 use std::{
     convert::Infallible,
@@ -22,7 +22,7 @@ pub(crate) trait Handler<T, S>: Clone + Send + Sized + 'static {
     type Future: Future<Output = Response> + Send + 'static;
 
     // Call the handler with the given request
-    fn call(self, req: http::Request<Body>, state: S) -> Self::Future;
+    fn call(self, req: Request<Body>, state: S) -> Self::Future;
 
     // Convert the handler into tower_service::Service
     fn into_service(self) -> IntoService<Self, T, ()> {
@@ -35,7 +35,7 @@ pub(crate) trait RawHandler<T, S>: Clone + Send + Sized + 'static {
     type Future: Future<Output = Response> + Send + 'static;
 
     // Call the handler with the given request
-    fn call(self, req: http::Request<Body>, state: S) -> Self::Future;
+    fn call(self, req: Request<Body>, state: S) -> Self::Future;
 
     // Convert the handler into tower_service::Service
     fn into_service(self) -> RawIntoService<Self, T, ()> {
@@ -54,7 +54,7 @@ where
 {
     type Future = Pin<Box<dyn Future<Output = Response> + Send>>;
 
-    fn call(self, req: http::Request<Body>, _state: S) -> Self::Future {
+    fn call(self, req: Request<Body>, _state: S) -> Self::Future {
         Box::pin(async move {
             let (parts, _) = req.into_parts();
 
@@ -84,7 +84,7 @@ macro_rules! impl_handler {
         {
             type Future = Pin<Box<dyn Future<Output = Response> + Send>>;
 
-            fn call(self, req: http::Request<Body>, state: S) -> Self::Future {
+            fn call(self, req: Request<Body>, state: S) -> Self::Future {
                 Box::pin(async move {
                     let (mut parts, _) = req.into_parts();
 
@@ -121,7 +121,7 @@ macro_rules! impl_handler {
         {
             type Future = Pin<Box<dyn Future<Output = Response> + Send>>;
 
-            fn call(self, req: http::Request<Body>, state: S) -> Self::Future {
+            fn call(self, req: Request<Body>, state: S) -> Self::Future {
                 Box::pin(async move {
                     let (mut parts, _) = req.into_parts();
 
@@ -166,7 +166,7 @@ impl<H, T, S> IntoService<H, T, S> {
     }
 }
 
-impl<H, T, S> Service<http::Request<Body>> for IntoService<H, T, S>
+impl<H, T, S> Service<Request<Body>> for IntoService<H, T, S>
 where
     S: Clone + Send + Sync,
     H: Handler<T, S>,
@@ -179,7 +179,7 @@ where
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, req: http::Request<Body>) -> Self::Future {
+    fn call(&mut self, req: Request<Body>) -> Self::Future {
         use futures::future::FutureExt;
 
         H::call(self.handler.clone(), req, self.state.clone()).map(Ok)
@@ -204,7 +204,7 @@ impl<H, T, S> RawIntoService<H, T, S> {
     }
 }
 
-impl<H, T, S> Service<http::Request<Body>> for RawIntoService<H, T, S>
+impl<H, T, S> Service<Request<Body>> for RawIntoService<H, T, S>
 where
     S: Clone + Send + Sync,
     H: RawHandler<T, S>,
@@ -217,7 +217,7 @@ where
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, req: http::Request<Body>) -> Self::Future {
+    fn call(&mut self, req: Request<Body>) -> Self::Future {
         use futures::future::FutureExt;
 
         H::call(self.handler.clone(), req, self.state.clone()).map(Ok)
