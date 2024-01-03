@@ -7,6 +7,7 @@ use axum::{
 };
 use clap::Parser;
 use std::{net::SocketAddr, time::Duration};
+use tokio::net::TcpListener;
 use tracing::{debug, warn};
 
 mod api;
@@ -38,7 +39,7 @@ struct Args {
     listenbrainz_token: Option<String>,
 }
 
-async fn print_request(req: Request<Body>, next: Next<Body>) -> Response {
+async fn print_request(req: Request<Body>, next: Next) -> Response {
     let method = req.method().clone();
     let uri = req.uri().clone();
 
@@ -83,9 +84,8 @@ async fn run_main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .layer(middleware::from_fn(print_request));
 
-    axum::Server::bind(&args.address)
-        .serve(app.into_make_service())
-        .await?;
+    let listener = TcpListener::bind(&args.address).await?;
+    axum::serve(listener, app.into_make_service()).await?;
 
     Ok(())
 }
