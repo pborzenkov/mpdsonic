@@ -12,7 +12,7 @@ clap = { version = "4.4", features = ["cargo", "env", "derive"] }
 constant_time_eq = "0.3"
 futures = "0.3"
 hex = "0.4"
-http = "0.2"
+http = "1.0"
 itertools = "0.12"
 md5 = "0.7"
 mime = "0.3"
