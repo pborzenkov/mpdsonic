@@ -2,20 +2,19 @@ use super::{
     error::Error,
     types::{CoverArtID, SongID},
 };
-use crate::library;
 use axum::{
-    body::StreamBody,
+    body::Body,
     extract::{Extension, Query},
     http::{header, HeaderValue},
     response::{IntoResponse, Response},
     routing::Router,
 };
-use bytes::{BufMut, Bytes, BytesMut};
-use futures::Stream;
+use bytes::{BufMut, BytesMut};
+
 use futures::StreamExt;
 use mpd_client::commands::{AlbumArt, GetPlaylist};
 use serde::Deserialize;
-use std::{pin::Pin, process::Stdio, sync::Arc};
+use std::{process::Stdio, sync::Arc};
 use tokio::process::Command;
 use tokio_util::io::{ReaderStream, StreamReader};
 use tracing::warn;
@@ -119,7 +118,7 @@ static FFMPEG_BITRATES: &[u32] = &[96, 112, 128, 160, 192];
 async fn stream(
     Extension(state): Extension<Arc<super::State>>,
     Query(params): Query<StreamQuery>,
-) -> super::Result<StreamBody<Pin<Box<dyn Stream<Item = library::Result<Bytes>> + Send>>>> {
+) -> super::Result<Body> {
     let input_stream = state.lib.get_song(&params.song.path).await?;
 
     let output_stream = match params.format.as_deref() {
@@ -185,7 +184,7 @@ async fn stream(
         Some(_) => return Err(Error::generic_error(Some("unsupported format"))),
     };
 
-    Ok(StreamBody::new(output_stream))
+    Ok(Body::from_stream(output_stream))
 }
 
 #[derive(Clone, Deserialize)]

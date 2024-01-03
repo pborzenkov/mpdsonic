@@ -11,7 +11,7 @@ use axum::{
 use bb8::Pool;
 use glue::{Handler, RawHandler};
 use serde::{Deserialize, Serialize};
-use std::{convert::Infallible, sync::Arc};
+use std::sync::Arc;
 use tower_http::cors::{Any, CorsLayer};
 
 mod annotation;
@@ -86,25 +86,25 @@ pub(crate) fn get_router(
 }
 
 // handler converts an API handler into a MethodRouter which can be provided to axum's router
-fn handler<H, T>(handler: H) -> MethodRouter<(), Body, Infallible>
+fn handler<H, T>(handler: H) -> MethodRouter
 where
     H: Handler<T, ()>,
     T: Clone + 'static,
 {
     on_service(
-        MethodFilter::GET | MethodFilter::POST,
+        MethodFilter::GET.or(MethodFilter::POST),
         handler.into_service(),
     )
 }
 
 // raw_handler converts a raw API handler into a MethodRouter which can be provided to axum's router
-fn raw_handler<H, T>(handler: H) -> MethodRouter<(), Body, Infallible>
+fn raw_handler<H, T>(handler: H) -> MethodRouter
 where
     H: RawHandler<T, ()>,
     T: Clone + 'static,
 {
     on_service(
-        MethodFilter::GET | MethodFilter::POST,
+        MethodFilter::GET.or(MethodFilter::POST),
         handler.into_service(),
     )
 }
@@ -117,7 +117,7 @@ struct AuthenticationQuery {
     s: Option<String>,
 }
 
-async fn authenticate(req: Request<Body>, next: Next<Body>, auth: Authentication) -> Response {
+async fn authenticate(req: Request<Body>, next: Next, auth: Authentication) -> Response {
     use constant_time_eq::constant_time_eq;
 
     let (mut parts, body) = req.into_parts();
