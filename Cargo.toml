@@ -31,7 +31,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 url = "2.4"
 xml-rs = "0.8"
 yaserde = "0.8"
-yaserde_derive = "0.8"
+yaserde_derive = "0.9"
 
 [lints.rust]
 warnings = "deny"
