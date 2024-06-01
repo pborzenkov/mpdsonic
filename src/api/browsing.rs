@@ -91,7 +91,7 @@ async fn get_artists(
             name: artist.to_string(),
             album_count: count,
         })
-        .group_by(|artist| {
+        .chunk_by(|artist| {
             artist
                 .name
                 .chars()
